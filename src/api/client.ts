@@ -6,6 +6,7 @@ import type {
   HouseholdMember,
   ImportedRow,
   ReportSummary,
+  RecurringSummary,
   StageResult,
   TokenPair,
   TransactionSummary,
@@ -15,7 +16,7 @@ import { SessionStore } from '../auth/session-store';
 import { ReadCache, type CachedRead } from '../cache/read-cache';
 import { isRecord } from '../shared/guards';
 
-export type RequestMethod = 'GET' | 'POST';
+export type RequestMethod = 'GET' | 'POST' | 'DELETE';
 export interface WxResponse {
   statusCode: number;
   data: unknown;
@@ -180,6 +181,9 @@ export class ApiClient {
   fetchAccounts<T = unknown>(): Promise<T> { return this.get('/accounts'); }
   fetchCategories<T = unknown>(): Promise<T> { return this.get('/categories'); }
   fetchPendingDrafts<T = unknown>(): Promise<T> { return this.get('/drafts'); }
+  fetchRecurring(): Promise<RecurringSummary[]> { return this.get('/recurring'); }
+  createRecurring(input: JsonObject): Promise<RecurringSummary> { return this.post('/recurring', input); }
+  advanceRecurring(id: string): Promise<RecurringSummary> { return this.post(`/recurring/${encodeURIComponent(id)}/advance`); }
   createTransaction<T = TransactionSummary>(input: JsonObject): Promise<T> { return this.post('/transactions', input); }
   stageImport<T = unknown>(input: JsonObject): Promise<T> { return this.post('/imports/stage', input); }
   confirmDraft<T = TransactionSummary>(draftId: string, input: JsonObject = {}): Promise<T> { return this.post(`/drafts/${encodeURIComponent(draftId)}/confirm`, input); }
@@ -195,10 +199,16 @@ export class ApiClient {
   askAi<T extends Partial<AiAnswer> & { answer: string } = { answer: string }>(message: string): Promise<T> { return this.post('/ai/chat', { message }); }
   fetchMembers(): Promise<HouseholdMember[]> { return this.get('/households/members'); }
   createInvite(expiresInDays = 7): Promise<HouseholdInvite> { return this.post('/households/invites', { expiresInDays }); }
+  removeMember(membershipId: string): Promise<unknown> { return this.requestJson('DELETE' as RequestMethod, `/households/members/${encodeURIComponent(membershipId)}`, undefined, false); }
   exportTransactions(period: Query, format: 'json' | 'csv' = 'json'): Promise<unknown> { return this.get('/exports/transactions', { ...period, format }); }
   loginWithWechat(input: { code: string; inviteCode?: string; householdName?: string }): Promise<WechatLoginResponse> { return this.post('/auth/wechat/login', input); }
+  async logout(): Promise<void> {
+    const session = this.options.sessions.read();
+    if (!session) return;
+    try { await this.post('/auth/logout', { refreshToken: session.refreshToken }); } finally { this.options.sessions.clear(); }
+  }
 
-  private async requestJson<T>(method: RequestMethod, path: string, data: unknown, canRefresh: boolean): Promise<T> {
+  private async requestJson<T>(method: RequestMethod | 'DELETE', path: string, data: unknown, canRefresh: boolean): Promise<T> {
     try {
       const response = await this.rawRequest(method, path, data);
       if (response.statusCode >= 200 && response.statusCode < 300) return this.parseBody<T>(response.data);
@@ -212,7 +222,7 @@ export class ApiClient {
     }
   }
 
-  private rawRequest(method: RequestMethod, path: string, data: unknown): Promise<WxResponse> {
+  private rawRequest(method: RequestMethod | 'DELETE', path: string, data: unknown): Promise<WxResponse> {
     const session = this.options.sessions.read();
     const header: Record<string, string> = session ? { Authorization: `Bearer ${session.accessToken}` } : {};
     return new Promise<WxResponse>((resolve, reject) => {
