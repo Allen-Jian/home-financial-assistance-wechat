@@ -1,0 +1,1 @@
+<view class="amount-card"><text class="label">{{label}}</text><text class="amount">{{amount}}</text><text wx:if="{{caption}}" class="caption">{{caption}}</text></view>

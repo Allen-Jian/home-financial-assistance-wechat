@@ -29,6 +29,10 @@ export interface DashboardSummary {
   expenseMinor: number;
   categoryBreakdown: BreakdownRow[];
   accountBreakdown: BreakdownRow[];
+  pendingDraftCount?: number;
+  duplicateCount?: number;
+  recurringDueCount?: number;
+  recentTransactions?: TransactionSummary[];
 }
 
 export interface AccountSummary {

@@ -1,0 +1,1 @@
+<view class="period-switch"><block wx:for="{{items}}" wx:key="value"><button class="{{item.value === selected ? 'active' : ''}}" data-value="{{item.value}}">{{item.label}}</button></block></view>

@@ -1,0 +1,1 @@
+{ "navigationBarTitleText": "首页", "usingComponents": { "amount-card": "/components/amount-card/index", "period-switch": "/components/period-switch/index", "transaction-row": "/components/transaction-row/index" } }

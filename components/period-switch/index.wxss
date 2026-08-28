@@ -1,0 +1,1 @@
+.period-switch { display: flex; gap: 12rpx; }.period-switch button { flex: 1; height: 64rpx; line-height: 64rpx; border-radius: 16rpx; color: #6b817d; background: #e8f3ef; font-size: 24rpx; }.period-switch .active { color: #fff; background: #127c73; }

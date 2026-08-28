@@ -1,0 +1,1 @@
+{ "component": true, "properties": { "items": { "type": "Array", "value": [] }, "selected": { "type": "String", "value": "month" } } }

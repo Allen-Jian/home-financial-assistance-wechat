@@ -1,0 +1,1 @@
+<view class="transaction-row"><view><text class="merchant">{{merchant || '未命名账目'}}</text><text class="date">{{date}}</text></view><text class="amount {{direction}}">{{amount}}</text></view>

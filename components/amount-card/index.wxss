@@ -1,0 +1,1 @@
+.amount-card { padding: 28rpx; border-radius: 24rpx; background: #fff; }.label, .caption { display: block; color: #78918d; font-size: 22rpx; }.amount { display: block; margin: 10rpx 0; color: #123b38; font-size: 42rpx; font-weight: 700; }
