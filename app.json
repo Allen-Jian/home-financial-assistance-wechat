@@ -1,0 +1,33 @@
+{
+  "pages": [
+    "pages/login/index",
+    "pages/dashboard/index",
+    "pages/ledger/index",
+    "pages/imports/index",
+    "pages/drafts/index",
+    "pages/reports/index",
+    "pages/ai/index",
+    "pages/recurring/index",
+    "pages/household/index",
+    "pages/more/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "家庭手账",
+    "navigationBarBackgroundColor": "#0f766e",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f8fafc",
+    "backgroundTextStyle": "light"
+  },
+  "tabBar": {
+    "color": "#64748b",
+    "selectedColor": "#0f766e",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/dashboard/index", "text": "首页" },
+      { "pagePath": "pages/ledger/index", "text": "账目" },
+      { "pagePath": "pages/reports/index", "text": "报表" },
+      { "pagePath": "pages/more/index", "text": "更多" }
+    ]
+  }
+}
