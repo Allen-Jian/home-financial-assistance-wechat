@@ -1,0 +1,1 @@
+<view class="draft-review-card"><text class="source">{{source}}</text><text class="merchant">{{merchant}}</text><text class="amount">{{amount}}</text><text class="reason">{{reason}}</text></view>

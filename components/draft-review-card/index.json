@@ -1,0 +1,1 @@
+{ "component": true, "properties": { "source": { "type": "String" }, "merchant": { "type": "String" }, "amount": { "type": "String" }, "reason": { "type": "String" } } }

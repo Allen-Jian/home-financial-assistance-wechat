@@ -1,9 +1,12 @@
 import type {
   AiAnswer,
   DashboardSummary,
+  DocumentDraft,
   HouseholdInvite,
   HouseholdMember,
+  ImportedRow,
   ReportSummary,
+  StageResult,
   TokenPair,
   TransactionSummary,
   WechatLoginResponse,
@@ -181,6 +184,14 @@ export class ApiClient {
   stageImport<T = unknown>(input: JsonObject): Promise<T> { return this.post('/imports/stage', input); }
   confirmDraft<T = TransactionSummary>(draftId: string, input: JsonObject = {}): Promise<T> { return this.post(`/drafts/${encodeURIComponent(draftId)}/confirm`, input); }
   previewDuplicates<T = unknown>(input: JsonObject): Promise<T> { return this.post('/duplicate-candidates/preview', input); }
+  previewDocument(input: { filePath: string; fileName: string; contentType: string }): Promise<DocumentDraft> {
+    return this.upload('/imports/pdf/preview', { filePath: input.filePath, name: 'file' });
+  }
+  previewAnzCsv(csv: string): Promise<ImportedRow[]> { return this.post('/imports/anz-csv/preview', { csv }); }
+  stageAnzCsv(input: { fileHash: string; csv: string }): Promise<StageResult> { return this.post('/imports/anz-csv/stage', input); }
+  uploadAttachment(input: { filePath: string; draftId: string; originalName: string; contentType: string }): Promise<unknown> {
+    return this.upload(`/attachments/draft/${encodeURIComponent(input.draftId)}`, { filePath: input.filePath, name: 'file' });
+  }
   askAi<T extends Partial<AiAnswer> & { answer: string } = { answer: string }>(message: string): Promise<T> { return this.post('/ai/chat', { message }); }
   fetchMembers(): Promise<HouseholdMember[]> { return this.get('/households/members'); }
   createInvite(expiresInDays = 7): Promise<HouseholdInvite> { return this.post('/households/invites', { expiresInDays }); }
