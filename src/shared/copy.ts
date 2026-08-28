@@ -9,4 +9,10 @@ export const copy = {
   confirmEntry: '确认入账',
   draftReview: '待确认草稿',
   aiReadOnlyNotice: 'AI 只能读取已确认的账本数据，不会自动改账',
+  loginExpired: '登录已过期，请重新登录',
+  duplicateConflict: '账本存在重复或版本冲突，请回到账目页面处理',
+  requestTimeout: '请求超时，请稍后重试',
+  aiFailed: 'AI 暂时不可用，请稍后重试',
 } as const;
+
+export const AI_CHAT_STORAGE_KEY = 'family-ledger.ai-chat.v1';
