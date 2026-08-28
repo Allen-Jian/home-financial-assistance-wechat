@@ -11,7 +11,14 @@
 
 ## 当前状态
 
-设计已确认，规格见 [`docs/superpowers/specs/2026-08-29-family-ledger-wechat-design.md`](docs/superpowers/specs/2026-08-29-family-ledger-wechat-design.md)。
+设计与实现计划已确认，规格见 [`docs/superpowers/specs/2026-08-29-family-ledger-wechat-design.md`](docs/superpowers/specs/2026-08-29-family-ledger-wechat-design.md)，计划见 [`docs/superpowers/plans/2026-08-29-family-ledger-wechat.md`](docs/superpowers/plans/2026-08-29-family-ledger-wechat.md)。
 
-实现会在规格审阅后开始。
+当前已完成本地 MVP：登录/Mock、家庭驾驶舱、单页记账、附件/CSV staging、草稿人工确认、重复候选、月季年报表、周期账单、家庭成员、导出和只读 AI 聊天。实现状态与证据见 [`docs/superpowers/implementation-status.md`](docs/superpowers/implementation-status.md)。
 
+```powershell
+npm ci
+npm test -- --runInBand
+npm run typecheck
+```
+
+真实微信登录、HTTPS 域名、MiniMax 凭据、VPS 部署和真机验收仍按文档列为外部门槛。没有 AppID 时，请按 [`docs/acceptance/mock-flow.md`](docs/acceptance/mock-flow.md) 运行 Mock 验收。
