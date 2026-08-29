@@ -37,6 +37,17 @@ test('ledger runtime page forwards input and save events to the model', async ()
   expect(context.setData).toHaveBeenCalledWith(model.state);
 });
 
+test('ledger runtime page opens the receipt import flow', () => {
+  const model = new LedgerPageModel({ createTransaction: jest.fn() });
+  const page = createLedgerPage(model);
+  const navigateTo = jest.fn();
+  (globalThis as { wx?: unknown }).wx = { navigateTo };
+
+  page.openImports();
+
+  expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/imports/index' });
+});
+
 test('household runtime page does not show removal confirmation for a member', () => {
   const model = new HouseholdPageModel({
     fetchMembers: jest.fn(), createInvite: jest.fn(), removeMember: jest.fn(),

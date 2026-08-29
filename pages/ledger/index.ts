@@ -132,6 +132,7 @@ export function createLedgerPage(model: LedgerPageModel) {
     onDateChange(this: PageContext, event: { detail?: { value?: string } }) { model.setDate(event.detail?.value ?? ''); this.setData(model.state); },
     onNoteInput(this: PageContext, event: { detail?: { value?: string } }) { model.setNote(event.detail?.value ?? ''); this.setData(model.state); },
     setAccounts(accounts: AccountSummary[]) { model.setAccounts(accounts); },
+    openImports() { wx.navigateTo({ url: '/pages/imports/index' }); },
     async onLoad(this: PageContext) { await model.load(); this.setData(model.state); },
     async save(this: PageContext) { await model.submit(); this.setData(model.state); },
     async later(this: PageContext) { await model.chooseDuplicate('later'); this.setData(model.state); },
@@ -141,6 +142,7 @@ export function createLedgerPage(model: LedgerPageModel) {
 
 declare function Page(options: Record<string, unknown>): void;
 declare function getApp<T>(): T;
+declare const wx: { navigateTo(options: { url: string }): void };
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
   Page(createLedgerPage(new LedgerPageModel(runtime.api as unknown as LedgerApiPort)));

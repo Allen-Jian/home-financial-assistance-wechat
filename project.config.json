@@ -2,11 +2,11 @@
   "description": "家庭手账微信小程序",
   "compileType": "miniprogram",
   "libVersion": "2.33.0",
-  "appid": "touristappid",
+  "appid": "wxff77e75108c26871",
   "projectname": "home-financial-assistance-wechat",
   "miniprogramRoot": "./",
   "setting": {
-    "urlCheck": false,
+    "urlCheck": true,
     "es6": true,
     "enhance": true,
     "postcss": true,
