@@ -13,7 +13,7 @@
 
 设计与实现计划已确认，规格见 [`docs/superpowers/specs/2026-08-29-family-ledger-wechat-design.md`](docs/superpowers/specs/2026-08-29-family-ledger-wechat-design.md)，计划见 [`docs/superpowers/plans/2026-08-29-family-ledger-wechat.md`](docs/superpowers/plans/2026-08-29-family-ledger-wechat.md)。
 
-当前已完成本地 MVP：登录/Mock、家庭驾驶舱、单页记账、附件/CSV staging、草稿人工确认、重复候选、月季年报表、周期账单、家庭成员、导出和只读 AI 聊天。实现状态与证据见 [`docs/superpowers/implementation-status.md`](docs/superpowers/implementation-status.md)。
+当前已完成本地 MVP：登录/Mock、家庭驾驶舱、J 配色与系统暗夜模式、单页记账、票据/PDF/自然语言 AI 草稿、CSV staging、草稿人工确认、重复候选、月季年报表、周期账单、家庭成员、导出、私有多轮只读 AI 聊天和驾驶舱洞察。实现状态与证据见 [`docs/superpowers/implementation-status.md`](docs/superpowers/implementation-status.md)。
 
 ```powershell
 npm ci
