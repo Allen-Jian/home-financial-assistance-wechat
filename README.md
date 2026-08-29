@@ -7,7 +7,7 @@
 - 本仓库只保存小程序前端、Mock、测试和 API 契约。
 - 不复制数据库，也不在小程序端直连 PostgreSQL。
 - 后端继续使用现有仓库 [`home-financial-assistance`](https://github.com/Allen-Jian/home-financial-assistance)。
-- 微信 AppID/AppSecret 只在后端环境配置；当前没有 AppID，开发阶段使用 Mock 登录。
+- 微信 AppID 可用于客户端工程配置；AppSecret 只在后端环境配置，不能写入小程序代码。
 
 ## 当前状态
 
@@ -17,8 +17,11 @@
 
 ```powershell
 npm ci
+npm run build:wechat
 npm test -- --runInBand
 npm run typecheck
 ```
 
-真实微信登录、HTTPS 域名、MiniMax 凭据、VPS 部署和真机验收仍按文档列为外部门槛。没有 AppID 时，请按 [`docs/acceptance/mock-flow.md`](docs/acceptance/mock-flow.md) 运行 Mock 验收。
+微信开发者工具需要 JavaScript 页面文件。修改 TypeScript 后先运行 `npm run build:wechat`，再导入本目录；该命令会生成 `app.js`、各页面 `index.js` 以及 `src` 依赖文件。
+
+当前工程已配置 AppID `wxff77e75108c26871` 和生产 API 地址。真实微信登录、MiniMax 凭据、备案后的合法域名和真机验收仍按文档列为外部门槛；没有后端 AppSecret 时，请先运行界面测试或按 [`docs/acceptance/mock-flow.md`](docs/acceptance/mock-flow.md) 运行 Mock 验收。

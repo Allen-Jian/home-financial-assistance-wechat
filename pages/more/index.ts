@@ -31,5 +31,5 @@ declare const wx: { reLaunch(options: { url: string }): void };
 declare function getApp<T>(): unknown;
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  Page(createMorePage(new MorePageModel(runtime.api)));
+  Page(createMorePage(new MorePageModel(runtime.api as unknown as MoreApiPort)));
 }

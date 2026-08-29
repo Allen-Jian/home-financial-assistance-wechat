@@ -5,7 +5,8 @@
   "description": "Native TypeScript WeChat Mini Program client for the family ledger.",
   "scripts": {
     "test": "jest --runInBand",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:wechat": "tsc -p tsconfig.miniprogram.json"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
