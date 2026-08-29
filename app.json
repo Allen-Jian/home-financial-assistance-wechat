@@ -24,10 +24,23 @@
     "backgroundColor": "#ffffff",
     "borderStyle": "white",
     "list": [
-      { "pagePath": "pages/dashboard/index", "text": "首页" },
-      { "pagePath": "pages/ledger/index", "text": "账目" },
-      { "pagePath": "pages/reports/index", "text": "报表" },
-      { "pagePath": "pages/more/index", "text": "更多" }
+      {
+        "pagePath": "pages/dashboard/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/ledger/index",
+        "text": "账目"
+      },
+      {
+        "pagePath": "pages/reports/index",
+        "text": "报表"
+      },
+      {
+        "pagePath": "pages/more/index",
+        "text": "更多"
+      }
     ]
-  }
+  },
+  "sitemapLocation": "sitemap.json"
 }
