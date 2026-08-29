@@ -1,4 +1,6 @@
 import type { ReportPeriodQuery } from '../reports/index';
+import { getRuntime } from '../../app';
+import { getPeriodBounds } from '../../src/domain/period';
 
 export interface MoreApiPort { exportTransactions(period: ReportPeriodQuery, format: 'json' | 'csv'): Promise<unknown>; logout(): Promise<void> }
 export class MorePageModel {
@@ -8,5 +10,26 @@ export class MorePageModel {
   async logout(): Promise<void> { await this.api.logout(); }
 }
 
+interface PageContext { setData(data: unknown): void }
+
+export function createMorePage(model: MorePageModel) {
+  return {
+    data: model.state,
+    async exportJson(this: PageContext) { await model.export(currentPeriod(), 'json'); this.setData(model.state); },
+    async exportCsv(this: PageContext) { await model.export(currentPeriod(), 'csv'); this.setData(model.state); },
+    async logout(this: PageContext) { await model.logout(); wx.reLaunch({ url: '/pages/login/index' }); this.setData(model.state); },
+  };
+}
+
+function currentPeriod(): ReportPeriodQuery {
+  const bounds = getPeriodBounds(new Date(), 'month');
+  return { from: bounds.from.toISOString(), to: bounds.to.toISOString() };
+}
+
 declare function Page(options: Record<string, unknown>): void;
-if (typeof Page !== 'undefined') Page({ data: { exported: null, error: '' } });
+declare const wx: { reLaunch(options: { url: string }): void };
+declare function getApp<T>(): unknown;
+if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
+  const runtime = getRuntime();
+  Page(createMorePage(new MorePageModel(runtime.api)));
+}

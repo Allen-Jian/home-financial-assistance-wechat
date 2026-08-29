@@ -1,13 +1,13 @@
 <view class="page ledger-page">
   <view class="page-title"><text>快速记账</text><text class="sub">保存前会检查重复</text></view>
-  <view class="direction-switch"><button class="{{direction === 'expense' ? 'active' : ''}}" data-value="expense">支出</button><button class="{{direction === 'income' ? 'active' : ''}}" data-value="income">收入</button><button class="{{direction === 'transfer' ? 'active' : ''}}" data-value="transfer">转账</button></view>
-  <view class="amount-box"><text class="currency">NZ$</text><input class="amount-input" type="digit" placeholder="0.00" value="{{amount}}" /></view>
-  <view class="field-row"><text>账户</text><picker mode="selector" range="{{accounts}}" range-key="name"><text class="picker-value">{{accountName || '选择账户'}}</text></picker></view>
-  <view class="field-row"><text>分类</text><picker mode="selector" range="{{categories}}" range-key="name"><text class="picker-value">{{categoryName || '选择分类'}}</text></picker></view>
-  <view class="field-row"><text>日期</text><picker mode="date" value="{{occurredAt}}"><text class="picker-value">{{occurredAt}}</text></picker></view>
-  <textarea class="note" placeholder="备注（可选）" value="{{note}}"></textarea>
+  <view class="direction-switch"><button bindtap="onDirectionChange" class="{{direction === 'expense' ? 'active' : ''}}" data-value="expense">支出</button><button bindtap="onDirectionChange" class="{{direction === 'income' ? 'active' : ''}}" data-value="income">收入</button><button bindtap="onDirectionChange" class="{{direction === 'transfer' ? 'active' : ''}}" data-value="transfer">转账</button></view>
+  <view class="amount-box"><text class="currency">NZ$</text><input bindinput="onAmountInput" class="amount-input" type="digit" placeholder="0.00" value="{{amount}}" /></view>
+  <view class="field-row"><text>账户</text><picker bindchange="onAccountChange" mode="selector" range="{{accounts}}" range-key="name"><text class="picker-value">{{accountName || '选择账户'}}</text></picker></view>
+  <view class="field-row"><text>分类</text><picker bindchange="onCategoryChange" mode="selector" range="{{categories}}" range-key="name"><text class="picker-value">{{categoryName || '选择分类'}}</text></picker></view>
+  <view class="field-row"><text>日期</text><picker bindchange="onDateChange" mode="date" value="{{occurredAt}}"><text class="picker-value">{{occurredAt}}</text></picker></view>
+  <textarea bindinput="onNoteInput" class="note" placeholder="备注（可选）" value="{{note}}"></textarea>
   <button class="attachment" open-type="chooseAvatar">📎 添加小票或单据</button>
   <text wx:if="{{error}}" class="error">{{error}}</text>
   <view wx:if="{{duplicateActions.length}}" class="duplicate-panel"><text class="duplicate-title">发现可能重复</text><text class="duplicate-detail">请确认是否与已有账目相同</text><view class="duplicate-actions"><button bindtap="later">稍后处理</button><button class="primary-button" bindtap="keepBoth">保留两笔</button></view></view>
-  <button class="primary-button save-button">保存账目</button>
+  <button bindtap="save" class="primary-button save-button">保存账目</button>
 </view>

@@ -1,5 +1,6 @@
 import type { ReportSummary } from '../../src/api/contracts';
 import { getPeriodBounds, type PeriodKind } from '../../src/domain/period';
+import { getRuntime } from '../../app';
 
 export interface ReportPeriodQuery { from: string; to: string; category?: string }
 export interface ReportApiPort {
@@ -62,7 +63,29 @@ export class ReportPageModel {
   }
 }
 
+interface PageContext { setData(data: unknown): void }
+
+export function createReportsPage(model: ReportPageModel) {
+  return {
+    data: model.state,
+    async onShow(this: PageContext) { await model.load('month', new Date()); this.setData(model.state); },
+    async changePeriod(this: PageContext, event: { currentTarget?: { dataset?: { kind?: string } } }) {
+      const kind = event.currentTarget?.dataset?.kind;
+      if (kind === 'month' || kind === 'quarter' || kind === 'year') await model.load(kind, new Date());
+      this.setData(model.state);
+    },
+    async drillDown(this: PageContext, event: { currentTarget?: { dataset?: { category?: string } } }) {
+      await model.drillDownCategory(event.currentTarget?.dataset?.category ?? '');
+      this.setData(model.state);
+    },
+    async exportJson(this: PageContext) { await model.export('json'); this.setData(model.state); },
+    async exportCsv(this: PageContext) { await model.export('csv'); this.setData(model.state); },
+  };
+}
+
 declare function Page(options: Record<string, unknown>): void;
-if (typeof Page !== 'undefined') {
-  Page({ data: { periodKind: 'month', period: {}, report: null, selectedCategory: '', loading: false, error: '', exported: null } });
+declare function getApp<T>(): unknown;
+if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
+  const runtime = getRuntime();
+  Page(createReportsPage(new ReportPageModel(runtime.api as unknown as ReportApiPort)));
 }

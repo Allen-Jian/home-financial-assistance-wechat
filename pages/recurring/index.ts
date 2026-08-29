@@ -1,4 +1,5 @@
 import type { RecurringSummary } from '../../src/api/contracts';
+import { getRuntime } from '../../app';
 
 export interface RecurringApiPort {
   fetchRecurring(): Promise<RecurringSummary[]>;
@@ -43,5 +44,18 @@ export class RecurringPageModel {
   }
 }
 
+interface PageContext { setData(data: unknown): void }
+
+export function createRecurringPage(model: RecurringPageModel) {
+  return {
+    data: model.state,
+    async onShow(this: PageContext) { await model.load(); this.setData(model.state); },
+  };
+}
+
 declare function Page(options: Record<string, unknown>): void;
-if (typeof Page !== 'undefined') Page({ data: { templates: [], dueCount: 0, loading: false, error: '' } });
+declare function getApp<T>(): unknown;
+if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
+  const runtime = getRuntime();
+  Page(createRecurringPage(new RecurringPageModel(runtime.api)));
+}

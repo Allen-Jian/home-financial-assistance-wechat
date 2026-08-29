@@ -1,6 +1,8 @@
 import type { AccountSummary, CategorySummary, DashboardSummary } from '../../src/api/contracts';
 import { ApiError } from '../../src/api/client';
 import { ReadCache } from '../../src/cache/read-cache';
+import { getRuntime } from '../../app';
+import { getPeriodBounds } from '../../src/domain/period';
 
 declare const wx: { navigateTo(options: { url: string }): void };
 
@@ -24,6 +26,8 @@ export interface DashboardState {
   fromCache: boolean;
   cacheLabel: string;
 }
+
+interface PageContext { setData(data: unknown): void }
 
 const CACHE_TTL = 5 * 60_000;
 
@@ -73,13 +77,26 @@ export class DashboardPageModel {
   }
 }
 
-declare function Page(options: Record<string, unknown>): void;
-if (typeof Page !== 'undefined') {
-  Page({
-    data: {
-      loading: false, error: '', summary: null, pendingDraftCount: 0, duplicateCount: 0,
-      recurringDueCount: 0, recentTransactions: [], fromCache: false, cacheLabel: '',
+export function createDashboardPage(
+  model: DashboardPageModel,
+  period: () => PeriodQuery = () => {
+    const bounds = getPeriodBounds(new Date(), 'month');
+    return { from: bounds.from.toISOString(), to: bounds.to.toISOString() };
+  },
+) {
+  return {
+    data: model.state,
+    async onShow(this: PageContext) {
+      await model.load(period());
+      this.setData(model.state);
     },
     onQuickEntry() { wx.navigateTo({ url: '/pages/ledger/index' }); },
-  });
+  };
+}
+
+declare function Page(options: Record<string, unknown>): void;
+declare function getApp<T>(): T;
+if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
+  const runtime = getRuntime();
+  Page(createDashboardPage(new DashboardPageModel(runtime.api as unknown as DashboardApiPort, runtime.cache)));
 }

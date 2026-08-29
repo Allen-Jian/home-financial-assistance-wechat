@@ -1,4 +1,5 @@
 import type { DocumentDraft, ImportedRow, StageResult } from '../../src/api/contracts';
+import { getRuntime } from '../../app';
 
 export const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
 export type ImportSourceType = 'manual-photo' | 'pdf' | 'anz-csv';
@@ -35,6 +36,50 @@ export interface ImportPageState {
   originalPreserved: boolean;
   loading: boolean;
   error: string;
+}
+
+interface PageContext { setData(data: unknown): void }
+
+interface WxFileRuntime {
+  path?: string;
+  tempFilePath?: string;
+  name?: string;
+  size?: number;
+  fileType?: string;
+  type?: string;
+}
+
+interface WxImportRuntime {
+  chooseMedia(options: { count: number; mediaType: string[]; sourceType: string[]; success: (result: { tempFiles: WxFileRuntime[] }) => void; fail: (error: unknown) => void }): void;
+  chooseMessageFile(options: { count: number; type: string; success: (result: { tempFiles: WxFileRuntime[] }) => void; fail: (error: unknown) => void }): void;
+  getFileSystemManager(): { readFile(options: { filePath: string; success: (result: { data: ArrayBuffer | string }) => void; fail: (error: unknown) => void }): void };
+}
+
+declare const wx: WxImportRuntime;
+
+function toPickedFile(file: WxFileRuntime, fallbackType: string): PickedImportFile {
+  const path = file.tempFilePath ?? file.path ?? '';
+  const rawType = file.fileType ?? file.type ?? fallbackType;
+  const contentType = rawType === 'image' ? 'image/jpeg' : rawType === 'pdf' ? 'application/pdf' : rawType === 'csv' ? 'text/csv' : rawType;
+  return { path, name: file.name ?? path.split('/').pop() ?? 'import', size: file.size ?? 0, contentType };
+}
+
+function createImportPicker(): ImportPickerPort {
+  return {
+    chooseMedia: () => new Promise((resolve, reject) => wx.chooseMedia({
+      count: 1, mediaType: ['image'], sourceType: ['camera', 'album'],
+      success: (result) => resolve(toPickedFile(result.tempFiles[0] ?? {}, 'image/jpeg')),
+      fail: reject,
+    })),
+    chooseMessageFile: () => new Promise((resolve, reject) => wx.chooseMessageFile({
+      count: 1, type: 'all',
+      success: (result) => resolve(toPickedFile(result.tempFiles[0] ?? {}, 'application/octet-stream')),
+      fail: reject,
+    })),
+    readFile: (path) => new Promise((resolve, reject) => wx.getFileSystemManager().readFile({
+      filePath: path, success: (result) => resolve(result.data), fail: reject,
+    })),
+  };
 }
 
 type FileContent = Uint8Array | string;
@@ -152,7 +197,19 @@ export class ImportPageModel {
   private reject(message: string): false { this.state.error = message; this.state.loading = false; return false; }
 }
 
+export function createImportPage(model: ImportPageModel) {
+  return {
+    data: model.state,
+    async choosePhoto(this: PageContext) { await model.choosePhoto(); this.setData(model.state); },
+    async chooseFile(this: PageContext) { await model.chooseFile(); this.setData(model.state); },
+    async chooseCsv(this: PageContext) { await model.chooseCsv(); this.setData(model.state); },
+    async stage(this: PageContext) { await model.stage(); this.setData(model.state); },
+  };
+}
+
 declare function Page(options: Record<string, unknown>): void;
-if (typeof Page !== 'undefined') {
-  Page({ data: { file: null, sourceType: '', preview: null, rows: [], stageResult: null, uploaded: false, originalPreserved: false, loading: false, error: '' } });
+declare function getApp<T>(): unknown;
+if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
+  const runtime = getRuntime();
+  Page(createImportPage(new ImportPageModel(createImportPicker(), runtime.api as unknown as ImportApiPort)));
 }

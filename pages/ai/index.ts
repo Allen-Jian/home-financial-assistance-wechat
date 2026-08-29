@@ -2,6 +2,7 @@ import type { AiAnswer, AiCitation } from '../../src/api/contracts';
 import { ApiError } from '../../src/api/client';
 import type { StorageLike } from '../../src/auth/session-store';
 import { AI_CHAT_STORAGE_KEY, copy } from '../../src/shared/copy';
+import { getRuntime } from '../../app';
 
 export const QUICK_QUESTIONS = ['本月花最多的分类？', '找出异常支出', '比较本季与上季'] as const;
 export interface AiApiPort { askAi(message: string): Promise<Partial<AiAnswer> & { answer: string }> }
@@ -82,5 +83,36 @@ export class AiPageModel {
   private persist(): void { this.storage.setStorageSync(AI_CHAT_STORAGE_KEY, JSON.stringify(this.state.messages)); }
 }
 
+interface PageContext { setData(data: unknown): void }
+
+interface WxNetworkRuntime {
+  getNetworkType(options: { success: (result: { networkType?: string }) => void; fail?: () => void }): void;
+  onNetworkStatusChange?(listener: (result: { isConnected?: boolean; networkType?: string }) => void): void;
+  reLaunch(options: { url: string }): void;
+}
+
+declare const wx: WxNetworkRuntime;
+
+function createOnlineStatus(): () => boolean {
+  let online = true;
+  wx.getNetworkType({ success: (result) => { online = result.networkType !== 'none'; }, fail: () => { online = false; } });
+  wx.onNetworkStatusChange?.((result) => { online = result.isConnected !== false && result.networkType !== 'none'; });
+  return () => online;
+}
+
+export function createAiPage(model: AiPageModel) {
+  return {
+    data: model.state,
+    async send(this: PageContext, event: { detail?: { value?: string } }) { await model.send(event.detail?.value ?? ''); this.setData(model.state); },
+    async quickQuestion(this: PageContext, event: { currentTarget?: { dataset?: { question?: string } } }) { await model.send(event.currentTarget?.dataset?.question ?? ''); this.setData(model.state); },
+    deleteHistory(this: PageContext) { model.deleteHistory(); this.setData(model.state); },
+  };
+}
+
 declare function Page(options: Record<string, unknown>): void;
-if (typeof Page !== 'undefined') Page({ data: { quickQuestions: QUICK_QUESTIONS, messages: [], loading: false, error: '', notice: copy.aiReadOnlyNotice } });
+declare function getApp<T>(): unknown;
+if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
+  const runtime = getRuntime();
+  const model = new AiPageModel(runtime.api, createOnlineStatus(), (route) => wx.reLaunch({ url: route }), runtime.storage);
+  Page(createAiPage(model));
+}

@@ -1,6 +1,7 @@
 import type { WechatLoginResponse } from '../../src/api/contracts';
 import { SessionStore } from '../../src/auth/session-store';
 import type { WechatAuth } from '../../src/auth/wechat-auth';
+import { getRuntime } from '../../app';
 
 export interface LoginPageState {
   inviteCode: string;
@@ -53,10 +54,11 @@ export function createLoginPage(model: LoginPageModel) {
 }
 
 declare function Page(options: Record<string, unknown>): void;
-if (typeof Page !== 'undefined') {
-  Page({
-    data: { inviteCode: '', householdName: '我的家庭', loading: false, error: '' },
-    onInviteCodeInput(this: PageContext, event: { detail?: { value?: string } }) { this.setData({ inviteCode: event.detail?.value ?? '' }); },
-    onHouseholdNameInput(this: PageContext, event: { detail?: { value?: string } }) { this.setData({ householdName: event.detail?.value ?? '' }); },
-  });
+declare function getApp<T>(): unknown;
+declare const wx: { switchTab(options: { url: string }): void };
+if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
+  const runtime = getRuntime();
+  Page(createLoginPage(new LoginPageModel(runtime.auth, runtime.sessions, (route) => {
+    if (route === '/pages/dashboard/index') wx.switchTab({ url: route });
+  })));
 }

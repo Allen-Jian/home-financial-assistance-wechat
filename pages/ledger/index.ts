@@ -1,9 +1,15 @@
 import { ApiError } from '../../src/api/client';
 import { parseNzdMinor } from '../../src/domain/money';
+import type { AccountSummary, CategorySummary } from '../../src/api/contracts';
+import { getRuntime } from '../../app';
 
 export type LedgerDirection = 'income' | 'expense' | 'transfer' | 'adjustment';
 export type DuplicateAction = 'later' | 'keep-both';
-export interface LedgerApiPort { createTransaction(input: Record<string, unknown>): Promise<unknown> }
+export interface LedgerApiPort {
+  createTransaction(input: Record<string, unknown>): Promise<unknown>;
+  fetchAccounts?: () => Promise<AccountSummary[]>;
+  fetchCategories?: () => Promise<CategorySummary[]>;
+}
 export interface LedgerState {
   direction: LedgerDirection;
   amount: string;
@@ -15,6 +21,10 @@ export interface LedgerState {
   saved: boolean;
   duplicateDetails: unknown;
   duplicateActions: ['稍后处理', '保留两笔'] | [];
+  accounts: AccountSummary[];
+  categories: CategorySummary[];
+  accountName: string;
+  categoryName: string;
 }
 
 const makeIdempotencyKey = () => `mini-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -23,7 +33,7 @@ export class LedgerPageModel {
   state: LedgerState = {
     direction: 'expense', amount: '', accountId: '', categoryId: '',
     occurredAt: new Date().toISOString().slice(0, 10), note: '', error: '', saved: false,
-    duplicateDetails: null, duplicateActions: [],
+    duplicateDetails: null, duplicateActions: [], accounts: [], categories: [], accountName: '', categoryName: '',
   };
   private pendingPayload: Record<string, unknown> | null = null;
 
@@ -35,6 +45,24 @@ export class LedgerPageModel {
   setCategory(value: string): void { this.state.categoryId = value; }
   setDate(value: string): void { this.state.occurredAt = value; }
   setNote(value: string): void { this.state.note = value; }
+  setAccounts(accounts: AccountSummary[]): void { this.state.accounts = accounts; }
+  setCategories(categories: CategorySummary[]): void { this.state.categories = categories; }
+  setAccountByIndex(index: number): void {
+    const account = this.state.accounts[index];
+    if (account) { this.state.accountId = account.id; this.state.accountName = account.name; }
+  }
+  setCategoryByIndex(index: number): void {
+    const category = this.state.categories[index];
+    if (category) { this.state.categoryId = category.id; this.state.categoryName = category.name; }
+  }
+  async load(): Promise<void> {
+    const [accounts, categories] = await Promise.all([
+      this.api.fetchAccounts?.() ?? Promise.resolve([]),
+      this.api.fetchCategories?.() ?? Promise.resolve([]),
+    ]);
+    this.setAccounts(accounts);
+    this.setCategories(categories);
+  }
 
   async submit(): Promise<boolean> {
     this.state.error = '';
@@ -88,9 +116,32 @@ export class LedgerPageModel {
   }
 }
 
+interface PageContext { setData(data: unknown): void }
+
+export function createLedgerPage(model: LedgerPageModel) {
+  return {
+    data: model.state,
+    onDirectionChange(this: PageContext, event: { currentTarget?: { dataset?: { value?: string } } }) {
+      const direction = event.currentTarget?.dataset?.value;
+      if (direction === 'income' || direction === 'expense' || direction === 'transfer') model.setDirection(direction);
+      this.setData(model.state);
+    },
+    onAmountInput(this: PageContext, event: { detail?: { value?: string } }) { model.setAmount(event.detail?.value ?? ''); this.setData(model.state); },
+    onAccountChange(this: PageContext, event: { detail?: { value?: number } }) { model.setAccountByIndex(Number(event.detail?.value ?? -1)); this.setData(model.state); },
+    onCategoryChange(this: PageContext, event: { detail?: { value?: number } }) { model.setCategoryByIndex(Number(event.detail?.value ?? -1)); this.setData(model.state); },
+    onDateChange(this: PageContext, event: { detail?: { value?: string } }) { model.setDate(event.detail?.value ?? ''); this.setData(model.state); },
+    onNoteInput(this: PageContext, event: { detail?: { value?: string } }) { model.setNote(event.detail?.value ?? ''); this.setData(model.state); },
+    setAccounts(accounts: AccountSummary[]) { model.setAccounts(accounts); },
+    async onLoad(this: PageContext) { await model.load(); this.setData(model.state); },
+    async save(this: PageContext) { await model.submit(); this.setData(model.state); },
+    async later(this: PageContext) { await model.chooseDuplicate('later'); this.setData(model.state); },
+    async keepBoth(this: PageContext) { await model.chooseDuplicate('keep-both'); this.setData(model.state); },
+  };
+}
+
 declare function Page(options: Record<string, unknown>): void;
-if (typeof Page !== 'undefined') {
-  Page({
-    data: { direction: 'expense', amount: '', accountId: '', categoryId: '', occurredAt: new Date().toISOString().slice(0, 10), note: '', error: '', saved: false, duplicateActions: [] },
-  });
+declare function getApp<T>(): T;
+if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
+  const runtime = getRuntime();
+  Page(createLedgerPage(new LedgerPageModel(runtime.api as unknown as LedgerApiPort)));
 }
