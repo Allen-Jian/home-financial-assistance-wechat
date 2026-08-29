@@ -140,8 +140,25 @@ export interface AiCitation {
   merchant?: string;
 }
 
+export interface AiInsight {
+  type: string;
+  title: string;
+  value?: number;
+  unit?: string;
+  detail?: string;
+}
+
+export interface AiConversationSummary {
+  id: string;
+  title?: string;
+  updatedAt: string;
+  expiresAt: string;
+}
+
 export interface AiAnswer {
   answer: string;
   scope: { from: string; to: string };
   citations: AiCitation[];
+  conversationId: string;
+  insights: AiInsight[];
 }

@@ -1,5 +1,6 @@
 import type {
   AiAnswer,
+  AiConversationSummary,
   DashboardSummary,
   DocumentDraft,
   HouseholdInvite,
@@ -10,6 +11,7 @@ import type {
   StageResult,
   TokenPair,
   TransactionSummary,
+  AiInsight,
   WechatLoginResponse,
 } from './contracts';
 import { SessionStore } from '../auth/session-store';
@@ -197,7 +199,14 @@ export class ApiClient {
   uploadAttachment(input: { filePath: string; draftId: string; originalName: string; contentType: string }): Promise<unknown> {
     return this.upload(`/attachments/draft/${encodeURIComponent(input.draftId)}`, { filePath: input.filePath, name: 'file' });
   }
-  askAi<T extends Partial<AiAnswer> & { answer: string } = { answer: string }>(message: string): Promise<T> { return this.post('/ai/chat', { message }); }
+  askAi(message: string): Promise<AiAnswer>;
+  askAi(input: { conversationId?: string; message: string }): Promise<AiAnswer>;
+  askAi(input: string | { conversationId?: string; message: string }): Promise<AiAnswer> {
+    return this.post('/ai/chat', typeof input === 'string' ? { message: input } : input);
+  }
+  listAiConversations(): Promise<AiConversationSummary[]> { return this.get('/ai/conversations'); }
+  deleteAiConversation(id: string): Promise<{ deleted: boolean }> { return this.requestJson('DELETE' as RequestMethod, `/ai/conversations/${encodeURIComponent(id)}`, undefined, false); }
+  fetchAiInsights(period: Query = {}): Promise<AiInsight[]> { return this.get('/ai/insights', period); }
   fetchMembers(): Promise<HouseholdMember[]> { return this.get('/households/members'); }
   createInvite(expiresInDays = 7): Promise<HouseholdInvite> { return this.post('/households/invites', { expiresInDays }); }
   removeMember(membershipId: string): Promise<unknown> { return this.requestJson('DELETE' as RequestMethod, `/households/members/${encodeURIComponent(membershipId)}`, undefined, false); }

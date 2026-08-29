@@ -135,7 +135,12 @@ class ApiClient {
     uploadAttachment(input) {
         return this.upload(`/attachments/draft/${encodeURIComponent(input.draftId)}`, { filePath: input.filePath, name: 'file' });
     }
-    askAi(message) { return this.post('/ai/chat', { message }); }
+    askAi(input) {
+        return this.post('/ai/chat', typeof input === 'string' ? { message: input } : input);
+    }
+    listAiConversations() { return this.get('/ai/conversations'); }
+    deleteAiConversation(id) { return this.requestJson('DELETE', `/ai/conversations/${encodeURIComponent(id)}`, undefined, false); }
+    fetchAiInsights(period = {}) { return this.get('/ai/insights', period); }
     fetchMembers() { return this.get('/households/members'); }
     createInvite(expiresInDays = 7) { return this.post('/households/invites', { expiresInDays }); }
     removeMember(membershipId) { return this.requestJson('DELETE', `/households/members/${encodeURIComponent(membershipId)}`, undefined, false); }
