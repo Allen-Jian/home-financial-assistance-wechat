@@ -14,7 +14,7 @@ class DashboardPageModel {
         this.state = {
             loading: false, error: '', summary: null, accounts: [], categories: [],
             pendingDraftCount: 0, duplicateCount: 0, recurringDueCount: 0, recentTransactions: [],
-            fromCache: false, cacheLabel: '', netWorthDisplay: '--', incomeDisplay: '--', expenseDisplay: '--',
+            fromCache: false, cacheLabel: '', netWorthDisplay: '--', incomeDisplay: '--', expenseDisplay: '--', insights: [], insightsFromCache: false,
         };
     }
     async load(period) {
@@ -30,6 +30,7 @@ class DashboardPageModel {
             this.state.accounts = accounts;
             this.state.categories = categories;
             (_a = this.cache) === null || _a === void 0 ? void 0 : _a.set(cacheKey, summary);
+            await this.loadInsights();
         }
         catch (error) {
             const cached = error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout')
@@ -44,6 +45,25 @@ class DashboardPageModel {
         }
         finally {
             this.state.loading = false;
+        }
+    }
+    async loadInsights() {
+        var _a, _b;
+        if (!this.api.fetchAiInsights)
+            return;
+        const cacheKey = 'dashboard:ai-insights';
+        try {
+            const insights = await this.api.fetchAiInsights();
+            this.state.insights = insights;
+            this.state.insightsFromCache = false;
+            (_a = this.cache) === null || _a === void 0 ? void 0 : _a.set(cacheKey, insights);
+        }
+        catch (error) {
+            const cached = error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout') ? (_b = this.cache) === null || _b === void 0 ? void 0 : _b.read(cacheKey, CACHE_TTL) : null;
+            if (cached) {
+                this.state.insights = cached.data;
+                this.state.insightsFromCache = true;
+            }
         }
     }
     applySummary(summary, fromCache) {

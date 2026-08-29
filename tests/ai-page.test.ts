@@ -59,6 +59,20 @@ test('deletes private local chat history', async () => {
   expect(model.state.messages).toEqual([]);
 });
 
+test('keeps the conversation id for multi-turn follow-up and deletes it on the server', async () => {
+  const storage = new MemoryStorage();
+  const api = {
+    askAi: jest.fn().mockResolvedValue({ ...answer, conversationId: 'c-1', insights: [] }),
+    deleteAiConversation: jest.fn().mockResolvedValue({ deleted: true }),
+  };
+  const model = new AiPageModel(api, () => true, jest.fn(), storage);
+  await model.send('本月花最多的分类？');
+  await model.send('那上个月呢？');
+  expect(api.askAi).toHaveBeenNthCalledWith(2, { conversationId: 'c-1', message: '那上个月呢？' });
+  await expect(model.deleteHistory()).resolves.toBe(true);
+  expect(api.deleteAiConversation).toHaveBeenCalledWith('c-1');
+});
+
 test('clears tokens and private AI cache on logout', () => {
   const storage = new MemoryStorage();
   const sessions = new SessionStore(storage);

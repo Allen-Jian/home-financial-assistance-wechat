@@ -6,6 +6,8 @@
   <view class="todo-row"><text>待确认草稿</text><text class="count">{{pendingDraftCount}}</text></view>
   <view class="todo-row"><text>重复候选</text><text class="count">{{duplicateCount}}</text></view>
   <view class="todo-row"><text>周期账单提醒</text><text class="count">{{recurringDueCount}}</text></view>
+  <view wx:if="{{insights.length}}" class="section-title"><text>本月关注</text><text class="muted">只读分析</text></view>
+  <view wx:if="{{insights.length}}" class="insight-list"><block wx:for="{{insights}}" wx:key="title"><view class="insight-card"><text class="insight-title">{{item.title}}</text><text wx:if="{{item.detail}}" class="insight-detail">{{item.detail}}</text></view></block></view>
   <view class="section-title"><text>最近账目</text><navigator url="/pages/ledger/index" class="link">查看全部</navigator></view>
   <view wx:if="{{recentTransactions.length === 0}}" class="empty">还没有最近账目，先记下第一笔吧</view>
   <button class="floating-add" bindtap="onQuickEntry">＋</button>

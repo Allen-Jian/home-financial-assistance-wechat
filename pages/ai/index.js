@@ -18,10 +18,34 @@ class AiPageModel {
         this.isOnline = isOnline;
         this.navigate = navigate;
         this.storage = storage;
-        this.state = { quickQuestions: exports.QUICK_QUESTIONS, messages: this.readHistory(), loading: false, error: '', notice: copy_1.copy.aiReadOnlyNotice };
+        this.state = { quickQuestions: exports.QUICK_QUESTIONS, messages: this.readHistory(), loading: false, error: '', notice: copy_1.copy.aiReadOnlyNotice, conversationId: '' };
+    }
+    async hydrate() {
+        if (!this.isOnline() || !this.api.listAiConversations)
+            return;
+        try {
+            const conversations = await this.api.listAiConversations();
+            const latest = conversations[0];
+            if (!latest)
+                return;
+            this.state.conversationId = latest.id;
+            if (Array.isArray(latest.messages))
+                this.state.messages = latest.messages.map((message) => {
+                    const content = typeof message.contentJson === 'object' && message.contentJson !== null ? message.contentJson : {};
+                    return {
+                        role: message.role,
+                        content: typeof content.answer === 'string' ? content.answer : typeof content.text === 'string' ? content.text : '',
+                        scope: content.scope,
+                        citations: Array.isArray(content.citations) ? content.citations : undefined,
+                        insights: Array.isArray(content.insights) ? content.insights : undefined,
+                    };
+                }).filter((message) => message.content);
+            this.persist();
+        }
+        catch { /* cached chat remains visible */ }
     }
     async send(message) {
-        var _a;
+        var _a, _b;
         const value = message.trim();
         if (!value)
             return false;
@@ -34,8 +58,9 @@ class AiPageModel {
         this.state.messages.push({ role: 'user', content: value });
         this.persist();
         try {
-            const result = await this.api.askAi(value);
-            this.state.messages.push({ role: 'assistant', content: result.answer, scope: result.scope, citations: (_a = result.citations) !== null && _a !== void 0 ? _a : [] });
+            const result = await this.api.askAi({ conversationId: this.state.conversationId || undefined, message: value });
+            this.state.conversationId = result.conversationId || this.state.conversationId;
+            this.state.messages.push({ role: 'assistant', content: result.answer, scope: result.scope, citations: (_a = result.citations) !== null && _a !== void 0 ? _a : [], insights: (_b = result.insights) !== null && _b !== void 0 ? _b : [] });
             this.persist();
             return true;
         }
@@ -60,8 +85,13 @@ class AiPageModel {
         }
     }
     deleteHistory() {
+        const conversationId = this.state.conversationId;
         this.state.messages = [];
+        this.state.conversationId = '';
         this.storage.removeStorageSync(copy_1.AI_CHAT_STORAGE_KEY);
+        if (!conversationId || !this.api.deleteAiConversation)
+            return Promise.resolve(true);
+        return this.api.deleteAiConversation(conversationId).then((result) => result.deleted).catch(() => false);
     }
     readHistory() {
         const raw = this.storage.getStorageSync(copy_1.AI_CHAT_STORAGE_KEY);
@@ -88,9 +118,10 @@ function createOnlineStatus() {
 function createAiPage(model) {
     return {
         data: model.state,
+        async onShow() { await model.hydrate(); this.setData(model.state); },
         async send(event) { var _a, _b; await model.send((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); this.setData(model.state); },
         async quickQuestion(event) { var _a, _b, _c; await model.send((_c = (_b = (_a = event.currentTarget) === null || _a === void 0 ? void 0 : _a.dataset) === null || _b === void 0 ? void 0 : _b.question) !== null && _c !== void 0 ? _c : ''); this.setData(model.state); },
-        deleteHistory() { model.deleteHistory(); this.setData(model.state); },
+        async deleteHistory() { await model.deleteHistory(); this.setData(model.state); },
     };
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {

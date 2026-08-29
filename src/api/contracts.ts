@@ -153,6 +153,12 @@ export interface AiConversationSummary {
   title?: string;
   updatedAt: string;
   expiresAt: string;
+  messages?: AiMessageDto[];
+}
+
+export interface AiMessageDto {
+  role: 'user' | 'assistant';
+  contentJson: unknown;
 }
 
 export interface AiAnswer {

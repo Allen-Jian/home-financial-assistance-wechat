@@ -1,16 +1,21 @@
-import type { AiAnswer, AiCitation } from '../../src/api/contracts';
+import type { AiAnswer, AiCitation, AiConversationSummary, AiInsight } from '../../src/api/contracts';
 import { ApiError } from '../../src/api/client';
 import type { StorageLike } from '../../src/auth/session-store';
 import { AI_CHAT_STORAGE_KEY, copy } from '../../src/shared/copy';
 import { getRuntime } from '../../app';
 
 export const QUICK_QUESTIONS = ['本月花最多的分类？', '找出异常支出', '比较本季与上季'] as const;
-export interface AiApiPort { askAi(message: string): Promise<Partial<AiAnswer> & { answer: string }> }
+export interface AiApiPort {
+  askAi(input: { conversationId?: string; message: string }): Promise<AiAnswer>;
+  listAiConversations?: () => Promise<AiConversationSummary[]>;
+  deleteAiConversation?: (id: string) => Promise<{ deleted: boolean }>;
+}
 export interface AiMessage {
   role: 'user' | 'assistant';
   content: string;
   scope?: { from: string; to: string };
   citations?: AiCitation[];
+  insights?: AiInsight[];
 }
 export interface AiPageState {
   quickQuestions: readonly string[];
@@ -18,6 +23,7 @@ export interface AiPageState {
   loading: boolean;
   error: string;
   notice: string;
+  conversationId: string;
 }
 
 function isMessage(value: unknown): value is AiMessage {
@@ -35,7 +41,28 @@ export class AiPageModel {
     private readonly navigate: (route: string) => void,
     private readonly storage: StorageLike,
   ) {
-    this.state = { quickQuestions: QUICK_QUESTIONS, messages: this.readHistory(), loading: false, error: '', notice: copy.aiReadOnlyNotice };
+    this.state = { quickQuestions: QUICK_QUESTIONS, messages: this.readHistory(), loading: false, error: '', notice: copy.aiReadOnlyNotice, conversationId: '' };
+  }
+
+  async hydrate(): Promise<void> {
+    if (!this.isOnline() || !this.api.listAiConversations) return;
+    try {
+      const conversations = await this.api.listAiConversations();
+      const latest = conversations[0] as (AiConversationSummary & { messages?: Array<{ role: 'user' | 'assistant'; contentJson?: unknown }> }) | undefined;
+      if (!latest) return;
+      this.state.conversationId = latest.id;
+      if (Array.isArray(latest.messages)) this.state.messages = latest.messages.map((message) => {
+        const content = typeof message.contentJson === 'object' && message.contentJson !== null ? message.contentJson as Record<string, unknown> : {};
+        return {
+          role: message.role,
+          content: typeof content.answer === 'string' ? content.answer : typeof content.text === 'string' ? content.text : '',
+          scope: content.scope as { from: string; to: string } | undefined,
+          citations: Array.isArray(content.citations) ? content.citations as AiCitation[] : undefined,
+          insights: Array.isArray(content.insights) ? content.insights as AiInsight[] : undefined,
+        };
+      }).filter((message) => message.content);
+      this.persist();
+    } catch { /* cached chat remains visible */ }
   }
 
   async send(message: string): Promise<boolean> {
@@ -47,8 +74,9 @@ export class AiPageModel {
     this.state.messages.push({ role: 'user', content: value });
     this.persist();
     try {
-      const result = await this.api.askAi(value);
-      this.state.messages.push({ role: 'assistant', content: result.answer, scope: result.scope, citations: result.citations ?? [] });
+      const result = await this.api.askAi({ conversationId: this.state.conversationId || undefined, message: value });
+      this.state.conversationId = result.conversationId || this.state.conversationId;
+      this.state.messages.push({ role: 'assistant', content: result.answer, scope: result.scope, citations: result.citations ?? [], insights: result.insights ?? [] });
       this.persist();
       return true;
     } catch (error) {
@@ -66,9 +94,13 @@ export class AiPageModel {
     } finally { this.state.loading = false; }
   }
 
-  deleteHistory(): void {
+  deleteHistory(): Promise<boolean> {
+    const conversationId = this.state.conversationId;
     this.state.messages = [];
+    this.state.conversationId = '';
     this.storage.removeStorageSync(AI_CHAT_STORAGE_KEY);
+    if (!conversationId || !this.api.deleteAiConversation) return Promise.resolve(true);
+    return this.api.deleteAiConversation(conversationId).then((result) => result.deleted).catch(() => false);
   }
 
   private readHistory(): AiMessage[] {
@@ -103,9 +135,10 @@ function createOnlineStatus(): () => boolean {
 export function createAiPage(model: AiPageModel) {
   return {
     data: model.state,
+    async onShow(this: PageContext) { await model.hydrate(); this.setData(model.state); },
     async send(this: PageContext, event: { detail?: { value?: string } }) { await model.send(event.detail?.value ?? ''); this.setData(model.state); },
     async quickQuestion(this: PageContext, event: { currentTarget?: { dataset?: { question?: string } } }) { await model.send(event.currentTarget?.dataset?.question ?? ''); this.setData(model.state); },
-    deleteHistory(this: PageContext) { model.deleteHistory(); this.setData(model.state); },
+    async deleteHistory(this: PageContext) { await model.deleteHistory(); this.setData(model.state); },
   };
 }
 

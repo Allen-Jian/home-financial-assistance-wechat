@@ -1,4 +1,4 @@
-import type { AccountSummary, CategorySummary, DashboardSummary } from '../../src/api/contracts';
+import type { AccountSummary, AiInsight, CategorySummary, DashboardSummary } from '../../src/api/contracts';
 import { ApiError } from '../../src/api/client';
 import { ReadCache } from '../../src/cache/read-cache';
 import { getRuntime } from '../../app';
@@ -12,6 +12,7 @@ export interface DashboardApiPort {
   fetchSummary(period: PeriodQuery): Promise<DashboardSummary>;
   fetchAccounts(): Promise<AccountSummary[]>;
   fetchCategories(): Promise<CategorySummary[]>;
+  fetchAiInsights?: () => Promise<AiInsight[]>;
 }
 
 export interface DashboardState {
@@ -29,6 +30,8 @@ export interface DashboardState {
   netWorthDisplay: string;
   incomeDisplay: string;
   expenseDisplay: string;
+  insights: AiInsight[];
+  insightsFromCache: boolean;
 }
 
 interface PageContext { setData(data: unknown): void }
@@ -39,7 +42,7 @@ export class DashboardPageModel {
   state: DashboardState = {
     loading: false, error: '', summary: null, accounts: [], categories: [],
     pendingDraftCount: 0, duplicateCount: 0, recurringDueCount: 0, recentTransactions: [],
-    fromCache: false, cacheLabel: '', netWorthDisplay: '--', incomeDisplay: '--', expenseDisplay: '--',
+    fromCache: false, cacheLabel: '', netWorthDisplay: '--', incomeDisplay: '--', expenseDisplay: '--', insights: [], insightsFromCache: false,
   };
 
   constructor(private readonly api: DashboardApiPort, private readonly cache?: ReadCache) {}
@@ -56,6 +59,7 @@ export class DashboardPageModel {
       this.state.accounts = accounts;
       this.state.categories = categories;
       this.cache?.set(cacheKey, summary);
+      await this.loadInsights();
     } catch (error) {
       const cached = error instanceof ApiError && (error.code === 'network' || error.code === 'timeout')
         ? this.cache?.read<DashboardSummary>(cacheKey, CACHE_TTL)
@@ -67,6 +71,20 @@ export class DashboardPageModel {
       }
     } finally {
       this.state.loading = false;
+    }
+  }
+
+  private async loadInsights(): Promise<void> {
+    if (!this.api.fetchAiInsights) return;
+    const cacheKey = 'dashboard:ai-insights';
+    try {
+      const insights = await this.api.fetchAiInsights();
+      this.state.insights = insights;
+      this.state.insightsFromCache = false;
+      this.cache?.set(cacheKey, insights);
+    } catch (error) {
+      const cached = error instanceof ApiError && (error.code === 'network' || error.code === 'timeout') ? this.cache?.read<AiInsight[]>(cacheKey, CACHE_TTL) : null;
+      if (cached) { this.state.insights = cached.data; this.state.insightsFromCache = true; }
     }
   }
 
