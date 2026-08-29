@@ -13,14 +13,15 @@
   ],
   "window": {
     "navigationBarTitleText": "家庭手账",
-    "navigationBarBackgroundColor": "#0f766e",
+    "navigationBarBackgroundColor": "#155EEF",
     "navigationBarTextStyle": "white",
-    "backgroundColor": "#f8fafc",
+    "backgroundColor": "#F3F7FF",
     "backgroundTextStyle": "light"
   },
+  "darkmode": true,
   "tabBar": {
-    "color": "#64748b",
-    "selectedColor": "#0f766e",
+    "color": "#6B7E9E",
+    "selectedColor": "#155EEF",
     "backgroundColor": "#ffffff",
     "borderStyle": "white",
     "list": [

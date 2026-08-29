@@ -1,7 +1,50 @@
 page {
-  background: #f8fafc;
-  color: #12252a;
+  --color-primary: #155EEF;
+  --color-primary-strong: #0B4ACB;
+  --color-gradient-secondary: #4A9BFF;
+  --color-background: #F3F7FF;
+  --color-surface: #FFFFFF;
+  --color-elevated: #FFFFFF;
+  --color-tint: #E3EDFF;
+  --color-text: #17263F;
+  --color-text-secondary: #334E7A;
+  --color-muted: #6B7E9E;
+  --color-line: #D9E5FA;
+  --color-income: #138A72;
+  --color-expense: #F15B6C;
+  --color-warning: #B56B00;
+  --color-warning-surface: #FFF4D6;
+  --color-expense-surface: #FFF1F2;
+  --color-on-primary: #FFFFFF;
+  --color-on-primary-muted: #DCE9FF;
+  --shadow-primary: rgba(21, 94, 239, .20);
+  background: var(--color-background);
+  color: var(--color-text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  page {
+    --color-primary: #5B9CFF;
+    --color-primary-strong: #8AB8FF;
+    --color-gradient-secondary: #2F74F3;
+    --color-background: #0B1220;
+    --color-surface: #121C2E;
+    --color-elevated: #18263D;
+    --color-tint: #182E55;
+    --color-text: #F3F7FF;
+    --color-text-secondary: #C2D2EE;
+    --color-muted: #9BACCA;
+    --color-line: #263958;
+    --color-income: #4AD6B6;
+    --color-expense: #FF7182;
+    --color-warning: #FFB020;
+    --color-warning-surface: #3A2B12;
+    --color-expense-surface: #3A1E2A;
+    --color-on-primary: #0B1220;
+    --color-on-primary-muted: #DCE9FF;
+    --shadow-primary: rgba(91, 156, 255, .28);
+  }
 }
 
 .page {
@@ -9,14 +52,14 @@ page {
 }
 
 .card {
-  background: #ffffff;
-  border: 1rpx solid #dcebe8;
+  background: var(--color-surface);
+  border: 1rpx solid var(--color-line);
   border-radius: 24rpx;
   padding: 24rpx;
 }
 
 .primary-button {
-  background: #0f766e;
-  color: #ffffff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   border-radius: 18rpx;
 }
