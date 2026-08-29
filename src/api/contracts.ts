@@ -98,6 +98,9 @@ export interface DocumentDraft {
   occurredAt?: string;
   merchant?: string;
   note?: string;
+  categoryHint?: string;
+  accountHint?: string;
+  fieldConfidence?: Record<string, number>;
   confidence?: number;
 }
 

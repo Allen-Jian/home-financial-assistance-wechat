@@ -59,7 +59,7 @@ class ImportPageModel {
         this.hashFile = hashFile;
         this.state = {
             file: null, sourceType: null, preview: null, rows: [], stageResult: null, uploaded: false,
-            originalPreserved: false, loading: false, error: '',
+            originalPreserved: false, loading: false, error: '', textInput: '',
         };
         this.content = null;
         this.staged = new Map();
@@ -76,11 +76,38 @@ class ImportPageModel {
         }
     }
     chooseCsv() { return this.select(this.picker.chooseMessageFile(), 'anz-csv'); }
+    async parseText(input) {
+        const value = input.trim();
+        if (!value)
+            return this.reject('请输入一笔账目描述');
+        this.state.loading = true;
+        this.state.error = '';
+        try {
+            this.state.preview = await this.api.parseDraft(value);
+            this.state.file = null;
+            this.state.sourceType = 'text';
+            this.state.textInput = value;
+            this.state.rows = [];
+            this.state.stageResult = null;
+            this.state.uploaded = false;
+            this.state.originalPreserved = true;
+            this.content = value;
+            return true;
+        }
+        catch (error) {
+            this.state.originalPreserved = true;
+            this.state.error = error instanceof Error ? error.message : 'AI 解析失败，请手工录入';
+            return false;
+        }
+        finally {
+            this.state.loading = false;
+        }
+    }
     async stage() {
         var _a, _b;
         const file = this.state.file;
-        if (!file || !this.content || !this.state.sourceType)
-            return this.reject('请先选择文件');
+        if (!this.content || !this.state.sourceType)
+            return this.reject('请先选择文件或输入账目描述');
         this.state.loading = true;
         this.state.error = '';
         try {
@@ -95,7 +122,7 @@ class ImportPageModel {
                 : await this.api.stageImport({ fileHash, sourceType: this.state.sourceType, draft: (_a = this.state.preview) !== null && _a !== void 0 ? _a : undefined });
             this.state.stageResult = result;
             this.staged.set(fileHash, result);
-            if (!result.reused) {
+            if (!result.reused && file) {
                 await this.api.uploadAttachment({ filePath: file.path, draftId: (_b = result.draftId) !== null && _b !== void 0 ? _b : result.batchId, originalName: file.name, contentType: file.contentType });
                 this.state.uploaded = true;
             }
@@ -132,6 +159,7 @@ class ImportPageModel {
             this.state.stageResult = null;
             this.state.uploaded = false;
             this.state.originalPreserved = true;
+            this.state.textInput = '';
             if (sourceType === 'anz-csv')
                 this.state.rows = await this.api.previewAnzCsv(asText(this.content));
             else
@@ -156,6 +184,7 @@ function createImportPage(model) {
         async choosePhoto() { await model.choosePhoto(); this.setData(model.state); },
         async chooseFile() { await model.chooseFile(); this.setData(model.state); },
         async chooseCsv() { await model.chooseCsv(); this.setData(model.state); },
+        async parseText(event) { var _a, _b; await model.parseText((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); this.setData(model.state); },
         async stage() { await model.stage(); this.setData(model.state); },
     };
 }

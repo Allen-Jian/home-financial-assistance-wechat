@@ -193,6 +193,7 @@ export class ApiClient {
   }
   previewAnzCsv(csv: string): Promise<ImportedRow[]> { return this.post('/imports/anz-csv/preview', { csv }); }
   stageAnzCsv(input: { fileHash: string; csv: string }): Promise<StageResult> { return this.post('/imports/anz-csv/stage', input); }
+  parseDraft(input: string): Promise<DocumentDraft> { return this.post('/ai/parse-draft', { input }); }
   uploadAttachment(input: { filePath: string; draftId: string; originalName: string; contentType: string }): Promise<unknown> {
     return this.upload(`/attachments/draft/${encodeURIComponent(input.draftId)}`, { filePath: input.filePath, name: 'file' });
   }

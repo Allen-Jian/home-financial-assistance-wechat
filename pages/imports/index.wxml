@@ -1,9 +1,10 @@
 <view class="page imports-page">
   <view class="page-title"><text>导入工作台</text><text class="sub">原件先保留，确认后才入账</text></view>
   <view class="action-grid"><button bindtap="choosePhoto">📷 拍照</button><button bindtap="chooseFile">📄 文件</button><button bindtap="chooseCsv">🧾 CSV</button></view>
+  <view class="text-entry"><input placeholder="例如：昨天超市花了 18.90" bindconfirm="parseText" confirm-type="done"/><button bindtap="parseText">AI 解析描述</button></view>
   <view wx:if="{{file}}" class="file-card"><text class="file-name">{{file.name}}</text><text class="file-meta">{{file.contentType}} · {{file.size}} bytes</text><text wx:if="{{originalPreserved}}" class="preserved">原件已保留</text></view>
-  <view wx:if="{{preview}}" class="preview-card"><view class="preview-line"><text>商户</text><text>{{preview.merchant || '未识别'}}</text></view><view class="preview-line"><text>金额</text><text>NZ$ {{preview.amountMinor / 100}}</text></view><view class="preview-line"><text>日期</text><text>{{preview.occurredAt || '未识别'}}</text></view><text class="confidence">AI 置信度 {{preview.confidence || 0}}</text></view>
+  <view wx:if="{{preview}}" class="preview-card"><view class="preview-line"><text>商户</text><text>{{preview.merchant || '未识别'}}</text></view><view class="preview-line"><text>金额</text><text>NZ$ {{preview.amountMinor / 100}}</text></view><view class="preview-line"><text>日期</text><text>{{preview.occurredAt || '未识别'}}</text></view><view wx:if="{{preview.categoryHint}}" class="preview-line"><text>建议分类</text><text>{{preview.categoryHint}}</text></view><view wx:if="{{preview.accountHint}}" class="preview-line"><text>建议账户</text><text>{{preview.accountHint}}</text></view><text class="confidence">AI 置信度 {{preview.confidence || 0}}</text></view>
   <view wx:if="{{rows.length}}" class="preview-card"><text class="section-title">ANZ 交易预览（{{rows.length}} 条）</text><block wx:for="{{rows}}" wx:key="sourceFingerprint"><view class="preview-line"><text>{{item.date}}</text><text>{{item.merchant}} · NZ$ {{item.amountMinor / 100}}</text></view></block></view>
   <text wx:if="{{error}}" class="error">{{error}}</text>
-  <button wx:if="{{file}}" class="primary-button" loading="{{loading}}" bindtap="stage">生成待确认草稿</button>
+  <button wx:if="{{file || preview}}" class="primary-button" loading="{{loading}}" bindtap="stage">生成待确认草稿</button>
 </view>

@@ -11,6 +11,7 @@ function makeModel(files: PickedImportFile[] = [image]) {
     readFile: jest.fn().mockImplementation(async (file: PickedImportFile) => file.bytes ?? file.text ?? ''),
   };
   const api = {
+    parseDraft: jest.fn().mockResolvedValue({ amountMinor: 1250, direction: 'expense', merchant: 'Market', confidence: 0.94 }),
     previewDocument: jest.fn().mockResolvedValue({ amountMinor: 1250, direction: 'expense', merchant: 'Market', confidence: 0.94 }),
     previewAnzCsv: jest.fn().mockResolvedValue([{ date: '2026-08-15', amountMinor: 1250, direction: 'expense', merchant: 'Market', sourceFingerprint: 'row-1' }]),
     stageImport: jest.fn().mockResolvedValue({ batchId: 'batch-1', draftCount: 1, reused: false, draftId: 'draft-1' }),

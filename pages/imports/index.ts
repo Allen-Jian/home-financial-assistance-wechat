@@ -2,7 +2,7 @@ import type { DocumentDraft, ImportedRow, StageResult } from '../../src/api/cont
 import { getRuntime } from '../../app';
 
 export const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
-export type ImportSourceType = 'manual-photo' | 'pdf' | 'anz-csv';
+export type ImportSourceType = 'manual-photo' | 'pdf' | 'anz-csv' | 'text';
 export interface PickedImportFile {
   path: string;
   name: string;
@@ -20,6 +20,7 @@ export interface ImportPickerPort {
 
 export interface ImportApiPort {
   previewDocument(input: { filePath: string; fileName: string; contentType: string }): Promise<DocumentDraft>;
+  parseDraft(input: string): Promise<DocumentDraft>;
   previewAnzCsv(csv: string): Promise<ImportedRow[]>;
   stageImport(input: Record<string, unknown>): Promise<StageResult>;
   stageAnzCsv(input: { fileHash: string; csv: string }): Promise<StageResult>;
@@ -36,6 +37,7 @@ export interface ImportPageState {
   originalPreserved: boolean;
   loading: boolean;
   error: string;
+  textInput: string;
 }
 
 interface PageContext { setData(data: unknown): void }
@@ -110,7 +112,7 @@ function simpleHash(content: FileContent): string {
 export class ImportPageModel {
   state: ImportPageState = {
     file: null, sourceType: null, preview: null, rows: [], stageResult: null, uploaded: false,
-    originalPreserved: false, loading: false, error: '',
+    originalPreserved: false, loading: false, error: '', textInput: '',
   };
   private content: FileContent | null = null;
   private readonly staged = new Map<string, StageResult>();
@@ -135,9 +137,34 @@ export class ImportPageModel {
 
   chooseCsv(): Promise<boolean> { return this.select(this.picker.chooseMessageFile(), 'anz-csv'); }
 
+  async parseText(input: string): Promise<boolean> {
+    const value = input.trim();
+    if (!value) return this.reject('请输入一笔账目描述');
+    this.state.loading = true;
+    this.state.error = '';
+    try {
+      this.state.preview = await this.api.parseDraft(value);
+      this.state.file = null;
+      this.state.sourceType = 'text';
+      this.state.textInput = value;
+      this.state.rows = [];
+      this.state.stageResult = null;
+      this.state.uploaded = false;
+      this.state.originalPreserved = true;
+      this.content = value;
+      return true;
+    } catch (error) {
+      this.state.originalPreserved = true;
+      this.state.error = error instanceof Error ? error.message : 'AI 解析失败，请手工录入';
+      return false;
+    } finally {
+      this.state.loading = false;
+    }
+  }
+
   async stage(): Promise<boolean> {
     const file = this.state.file;
-    if (!file || !this.content || !this.state.sourceType) return this.reject('请先选择文件');
+    if (!this.content || !this.state.sourceType) return this.reject('请先选择文件或输入账目描述');
     this.state.loading = true;
     this.state.error = '';
     try {
@@ -152,7 +179,7 @@ export class ImportPageModel {
         : await this.api.stageImport({ fileHash, sourceType: this.state.sourceType, draft: this.state.preview ?? undefined });
       this.state.stageResult = result;
       this.staged.set(fileHash, result);
-      if (!result.reused) {
+      if (!result.reused && file) {
         await this.api.uploadAttachment({ filePath: file.path, draftId: result.draftId ?? result.batchId, originalName: file.name, contentType: file.contentType });
         this.state.uploaded = true;
       }
@@ -182,6 +209,7 @@ export class ImportPageModel {
       this.state.stageResult = null;
       this.state.uploaded = false;
       this.state.originalPreserved = true;
+      this.state.textInput = '';
       if (sourceType === 'anz-csv') this.state.rows = await this.api.previewAnzCsv(asText(this.content));
       else this.state.preview = await this.api.previewDocument({ filePath: file.path, fileName: file.name, contentType: file.contentType });
       return true;
@@ -203,6 +231,7 @@ export function createImportPage(model: ImportPageModel) {
     async choosePhoto(this: PageContext) { await model.choosePhoto(); this.setData(model.state); },
     async chooseFile(this: PageContext) { await model.chooseFile(); this.setData(model.state); },
     async chooseCsv(this: PageContext) { await model.chooseCsv(); this.setData(model.state); },
+    async parseText(this: PageContext, event: { detail?: { value?: string } }) { await model.parseText(event.detail?.value ?? ''); this.setData(model.state); },
     async stage(this: PageContext) { await model.stage(); this.setData(model.state); },
   };
 }

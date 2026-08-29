@@ -131,6 +131,7 @@ class ApiClient {
     }
     previewAnzCsv(csv) { return this.post('/imports/anz-csv/preview', { csv }); }
     stageAnzCsv(input) { return this.post('/imports/anz-csv/stage', input); }
+    parseDraft(input) { return this.post('/ai/parse-draft', { input }); }
     uploadAttachment(input) {
         return this.upload(`/attachments/draft/${encodeURIComponent(input.draftId)}`, { filePath: input.filePath, name: 'file' });
     }
