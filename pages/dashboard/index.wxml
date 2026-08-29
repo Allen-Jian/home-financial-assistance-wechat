@@ -1,7 +1,7 @@
 <view class="page dashboard-page">
   <view class="topline"><view><text class="eyebrow">家庭驾驶舱</text><text class="heading">{{summary ? '今天也记得看一眼' : '正在准备你的账本'}}</text></view><text wx:if="{{cacheLabel}}" class="cache-label">{{cacheLabel}}</text></view>
-  <view class="net-worth-card"><text class="card-label">当前净资产</text><text class="net-worth">{{summary ? 'NZ$' + (summary.netWorthMinor / 100).toFixed(2) : '--'}}</text><text class="card-foot">资产减去负债</text></view>
-  <view class="metric-grid"><view class="metric income"><text>本期收入</text><text>{{summary ? 'NZ$' + (summary.incomeMinor / 100).toFixed(2) : '--'}}</text></view><view class="metric expense"><text>本期支出</text><text>{{summary ? 'NZ$' + (summary.expenseMinor / 100).toFixed(2) : '--'}}</text></view></view>
+  <view class="net-worth-card"><text class="card-label">当前净资产</text><text class="net-worth">{{netWorthDisplay}}</text><text class="card-foot">资产减去负债</text></view>
+  <view class="metric-grid"><view class="metric income"><text>本期收入</text><text>{{incomeDisplay}}</text></view><view class="metric expense"><text>本期支出</text><text>{{expenseDisplay}}</text></view></view>
   <view class="section-title"><text>待处理</text><text class="muted">人工确认后才会入账</text></view>
   <view class="todo-row"><text>待确认草稿</text><text class="count">{{pendingDraftCount}}</text></view>
   <view class="todo-row"><text>重复候选</text><text class="count">{{duplicateCount}}</text></view>

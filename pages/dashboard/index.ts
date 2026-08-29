@@ -3,6 +3,7 @@ import { ApiError } from '../../src/api/client';
 import { ReadCache } from '../../src/cache/read-cache';
 import { getRuntime } from '../../app';
 import { getPeriodBounds } from '../../src/domain/period';
+import { formatNzdMinor } from '../../src/domain/money';
 
 declare const wx: { navigateTo(options: { url: string }): void };
 
@@ -25,6 +26,9 @@ export interface DashboardState {
   recentTransactions: DashboardSummary['recentTransactions'];
   fromCache: boolean;
   cacheLabel: string;
+  netWorthDisplay: string;
+  incomeDisplay: string;
+  expenseDisplay: string;
 }
 
 interface PageContext { setData(data: unknown): void }
@@ -35,7 +39,7 @@ export class DashboardPageModel {
   state: DashboardState = {
     loading: false, error: '', summary: null, accounts: [], categories: [],
     pendingDraftCount: 0, duplicateCount: 0, recurringDueCount: 0, recentTransactions: [],
-    fromCache: false, cacheLabel: '',
+    fromCache: false, cacheLabel: '', netWorthDisplay: '--', incomeDisplay: '--', expenseDisplay: '--',
   };
 
   constructor(private readonly api: DashboardApiPort, private readonly cache?: ReadCache) {}
@@ -72,6 +76,9 @@ export class DashboardPageModel {
     this.state.duplicateCount = summary.duplicateCount ?? 0;
     this.state.recurringDueCount = summary.recurringDueCount ?? 0;
     this.state.recentTransactions = summary.recentTransactions ?? [];
+    this.state.netWorthDisplay = formatNzdMinor(summary.netWorthMinor);
+    this.state.incomeDisplay = formatNzdMinor(summary.incomeMinor);
+    this.state.expenseDisplay = formatNzdMinor(summary.expenseMinor);
     this.state.fromCache = fromCache;
     this.state.cacheLabel = fromCache ? '缓存数据' : '';
   }

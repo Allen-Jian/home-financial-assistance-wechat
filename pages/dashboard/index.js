@@ -5,6 +5,7 @@ exports.createDashboardPage = createDashboardPage;
 const client_1 = require("../../src/api/client");
 const app_1 = require("../../app");
 const period_1 = require("../../src/domain/period");
+const money_1 = require("../../src/domain/money");
 const CACHE_TTL = 5 * 60000;
 class DashboardPageModel {
     constructor(api, cache) {
@@ -13,7 +14,7 @@ class DashboardPageModel {
         this.state = {
             loading: false, error: '', summary: null, accounts: [], categories: [],
             pendingDraftCount: 0, duplicateCount: 0, recurringDueCount: 0, recentTransactions: [],
-            fromCache: false, cacheLabel: '',
+            fromCache: false, cacheLabel: '', netWorthDisplay: '--', incomeDisplay: '--', expenseDisplay: '--',
         };
     }
     async load(period) {
@@ -52,6 +53,9 @@ class DashboardPageModel {
         this.state.duplicateCount = (_b = summary.duplicateCount) !== null && _b !== void 0 ? _b : 0;
         this.state.recurringDueCount = (_c = summary.recurringDueCount) !== null && _c !== void 0 ? _c : 0;
         this.state.recentTransactions = (_d = summary.recentTransactions) !== null && _d !== void 0 ? _d : [];
+        this.state.netWorthDisplay = (0, money_1.formatNzdMinor)(summary.netWorthMinor);
+        this.state.incomeDisplay = (0, money_1.formatNzdMinor)(summary.incomeMinor);
+        this.state.expenseDisplay = (0, money_1.formatNzdMinor)(summary.expenseMinor);
         this.state.fromCache = fromCache;
         this.state.cacheLabel = fromCache ? '缓存数据' : '';
     }

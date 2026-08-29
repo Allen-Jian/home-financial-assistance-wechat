@@ -60,6 +60,23 @@ test('loads the household cockpit and exposes pending/duplicate/recurring counts
   }));
 });
 
+test('formats dashboard amounts before they reach the WXML template', async () => {
+  const api = {
+    fetchSummary: jest.fn().mockResolvedValue(summary),
+    fetchAccounts: jest.fn().mockResolvedValue(accounts),
+    fetchCategories: jest.fn().mockResolvedValue(categories),
+  };
+  const model = new DashboardPageModel(api);
+
+  await model.load({ from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' });
+
+  expect(model.state).toEqual(expect.objectContaining({
+    netWorthDisplay: 'NZ$1200.00',
+    incomeDisplay: 'NZ$3000.00',
+    expenseDisplay: 'NZ$1800.00',
+  }));
+});
+
 test('renders cached summary with a cache label after the API is unavailable', async () => {
   const storage = new MemoryStorage();
   const cache = new ReadCache(storage);
