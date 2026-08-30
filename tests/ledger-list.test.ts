@@ -2,6 +2,7 @@ import { LedgerListPageModel } from '../pages/ledger/index';
 import { getPeriodBounds } from '../src/domain/period';
 import { ReadCache } from '../src/cache/read-cache';
 import { ApiError } from '../src/api/client';
+import type { TransactionSummary } from '../src/api/contracts';
 
 test('ledger defaults to Auckland month and accepts a custom range', async () => {
   const api = { fetchTransactions: jest.fn().mockResolvedValue([]) };
@@ -57,4 +58,58 @@ test('ledger cache is isolated by household', async () => {
   const second = new LedgerListPageModel({ fetchTransactions: jest.fn().mockRejectedValue(new ApiError(0, 'network', 'offline')) }, () => new Date(), cache, () => 'house-b');
   await second.load(period);
   expect(second.state.transactions).toEqual([]);
+});
+
+test('late ledger request cannot clear the newer household state or loading', async () => {
+  let household = 'household-a';
+  let resolveFirst!: (value: TransactionSummary[]) => void;
+  const firstTransactions = new Promise<TransactionSummary[]>((resolve) => { resolveFirst = resolve; });
+  const secondTransaction = { id: 'new', accountId: 'p', direction: 'income' as const, amountMinor: 200, occurredAt: '2026-08-02T00:00:00.000Z', version: 0 };
+  const api = {
+    fetchTransactions: jest.fn().mockImplementationOnce(() => firstTransactions).mockResolvedValue([secondTransaction]),
+  };
+  const model = new LedgerListPageModel(api, () => new Date('2026-08-20T00:00:00Z'), undefined, () => household);
+  const firstLoad = model.load(model.currentPeriod());
+  household = 'household-b';
+  await model.load(model.currentPeriod());
+  expect(model.state.transactions).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'new' })]));
+  expect(model.state.loading).toBe(false);
+
+  resolveFirst([]);
+  await firstLoad;
+  expect(model.state.transactions).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'new' })]));
+  expect(model.state.loading).toBe(false);
+});
+
+test('ledger household cleanup resets selected displays and error', async () => {
+  let household = 'household-a';
+  let resolveRequest!: (value: TransactionSummary[]) => void;
+  const pending = new Promise<TransactionSummary[]>((resolve) => { resolveRequest = resolve; });
+  const model = new LedgerListPageModel(
+    { fetchTransactions: jest.fn().mockReturnValue(pending) },
+    () => new Date('2026-08-20T00:00:00Z'),
+    undefined,
+    () => household,
+  );
+  const load = model.load(model.currentPeriod());
+  Object.assign(model.state, {
+    transactions: [{ id: 'old', accountId: 'p', direction: 'expense', amountMinor: 100, occurredAt: '2026-08-02T00:00:00.000Z', version: 0, amountDisplay: 'NZ$1.00', dateDisplay: '2026/08/02', directionLabel: '支出' }],
+    selectedTransaction: { id: 'old', accountId: 'p', direction: 'expense', amountMinor: 100, occurredAt: '2026-08-02T00:00:00.000Z', version: 0 },
+    selectedAmountDisplay: 'NZ$1.00',
+    selectedDateDisplay: '2026/08/02',
+    selectedDirectionLabel: '支出',
+    error: '旧错误',
+  });
+  household = 'household-b';
+  resolveRequest([]);
+  await load;
+  expect(model.state).toEqual(expect.objectContaining({
+    transactions: [],
+    selectedTransaction: null,
+    selectedAmountDisplay: '',
+    selectedDateDisplay: '',
+    selectedDirectionLabel: '',
+    error: '',
+    loading: false,
+  }));
 });

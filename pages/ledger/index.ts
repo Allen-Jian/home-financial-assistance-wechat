@@ -81,6 +81,8 @@ function toDisplayDate(value: string): string {
 }
 
 export class LedgerListPageModel {
+  private requestGeneration = 0;
+
   state: LedgerListState = {
     periodMode: 'month', period: { from: '', to: '' }, customFrom: '', customTo: '',
     transactions: [], selectedTransaction: null, selectedAmountDisplay: '', selectedDateDisplay: '', selectedDirectionLabel: '', loading: false, error: '',
@@ -112,6 +114,7 @@ export class LedgerListPageModel {
   }
 
   async load(period: LedgerPeriodQuery): Promise<boolean> {
+    const generation = ++this.requestGeneration;
     this.state.period = period;
     const scope = this.householdId();
     const cacheKey = this.cacheKey(period, scope);
@@ -120,6 +123,7 @@ export class LedgerListPageModel {
     this.state.selectedTransaction = null;
     try {
       const transactions = await this.api.fetchTransactions(period);
+      if (generation !== this.requestGeneration) return false;
       if (scope !== this.householdId()) { this.clearPrivateState(); return false; }
       this.cache?.set(cacheKey, transactions);
       this.state.transactions = transactions.map((transaction) => ({
@@ -130,6 +134,7 @@ export class LedgerListPageModel {
       }));
       return true;
     } catch (error) {
+      if (generation !== this.requestGeneration) return false;
       if (scope !== this.householdId()) { this.clearPrivateState(); return false; }
       const cached = error instanceof ApiError && (error.code === 'network' || error.code === 'timeout')
         ? this.cache?.read<TransactionSummary[]>(cacheKey, 5 * 60_000)
@@ -138,7 +143,7 @@ export class LedgerListPageModel {
       else this.state.error = error instanceof Error ? error.message : '加载账目失败';
       return false;
     } finally {
-      this.state.loading = false;
+      if (generation === this.requestGeneration) this.state.loading = false;
     }
   }
 
@@ -156,7 +161,14 @@ export class LedgerListPageModel {
   setCustomTo(value: string): void { this.state.customTo = value; }
 
   private cacheKey(period: LedgerPeriodQuery, scope = this.householdId()): string { return `ledger:${scope}:${period.from}:${period.to}`; }
-  private clearPrivateState(): void { this.state.transactions = []; this.state.selectedTransaction = null; this.state.error = ''; }
+  private clearPrivateState(): void {
+    this.state.transactions = [];
+    this.state.selectedTransaction = null;
+    this.state.selectedAmountDisplay = '';
+    this.state.selectedDateDisplay = '';
+    this.state.selectedDirectionLabel = '';
+    this.state.error = '';
+  }
 
   shiftMonth(delta: number): LedgerPeriodQuery {
     const current = this.state.periodMode === 'month' ? this.state.period.from : this.currentPeriod().from;

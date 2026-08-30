@@ -12,6 +12,7 @@ class DashboardPageModel {
         this.api = api;
         this.cache = cache;
         this.householdId = householdId;
+        this.requestGeneration = 0;
         this.state = {
             loading: false, error: '', summary: null, accounts: [], categories: [],
             pendingDraftCount: 0, duplicateCount: 0, recurringDueCount: 0, recentTransactions: [],
@@ -20,6 +21,7 @@ class DashboardPageModel {
     }
     async load(period) {
         var _a, _b;
+        const generation = ++this.requestGeneration;
         const scope = this.householdId();
         const cacheKey = `dashboard:${scope}:${period.from}:${period.to}`;
         this.state.loading = true;
@@ -28,6 +30,8 @@ class DashboardPageModel {
             const [summary, accounts, categories] = await Promise.all([
                 this.api.fetchSummary(period), this.api.fetchAccounts(), this.api.fetchCategories(),
             ]);
+            if (generation !== this.requestGeneration)
+                return;
             if (scope !== this.householdId()) {
                 this.clearPrivateState();
                 return;
@@ -36,9 +40,11 @@ class DashboardPageModel {
             this.state.accounts = accounts;
             this.state.categories = categories;
             (_a = this.cache) === null || _a === void 0 ? void 0 : _a.set(cacheKey, summary);
-            await this.loadInsights(scope);
+            await this.loadInsights(scope, generation);
         }
         catch (error) {
+            if (generation !== this.requestGeneration)
+                return;
             if (scope !== this.householdId()) {
                 this.clearPrivateState();
                 return;
@@ -54,16 +60,19 @@ class DashboardPageModel {
             }
         }
         finally {
-            this.state.loading = false;
+            if (generation === this.requestGeneration)
+                this.state.loading = false;
         }
     }
-    async loadInsights(scope = this.householdId()) {
+    async loadInsights(scope, generation) {
         var _a, _b;
         if (!this.api.fetchAiInsights)
             return;
         const cacheKey = `dashboard:${scope}:ai-insights`;
         try {
             const insights = await this.api.fetchAiInsights();
+            if (generation !== this.requestGeneration)
+                return;
             if (scope !== this.householdId()) {
                 this.clearPrivateState();
                 return;
@@ -73,6 +82,8 @@ class DashboardPageModel {
             (_a = this.cache) === null || _a === void 0 ? void 0 : _a.set(cacheKey, insights);
         }
         catch (error) {
+            if (generation !== this.requestGeneration)
+                return;
             if (scope !== this.householdId()) {
                 this.clearPrivateState();
                 return;
@@ -104,9 +115,18 @@ class DashboardPageModel {
         this.state.summary = null;
         this.state.accounts = [];
         this.state.categories = [];
+        this.state.pendingDraftCount = 0;
+        this.state.duplicateCount = 0;
+        this.state.recurringDueCount = 0;
         this.state.recentTransactions = [];
+        this.state.fromCache = false;
         this.state.insights = [];
+        this.state.insightsFromCache = false;
+        this.state.error = '';
         this.state.netWorthDisplay = '--';
+        this.state.totalAssetsDisplay = '--';
+        this.state.initialAssetsDisplay = '--';
+        this.state.termDepositDisplay = '--';
         this.state.incomeDisplay = '--';
         this.state.expenseDisplay = '--';
         this.state.cacheLabel = '';

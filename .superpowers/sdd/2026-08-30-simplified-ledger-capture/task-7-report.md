@@ -23,3 +23,17 @@ Status: complete
 
 - Only the WeChat mini-program repository was changed; the API repository was not modified.
 - Real WeChat DevTools/device, live API, and external deployment acceptance were not run locally.
+
+## Privacy review remediation (2026-08-30)
+
+- Added a per-model request generation guard for dashboard summary, dashboard insights, and ledger loads. Stale success, failure, and `finally` paths now leave newer household state and loading untouched; household mismatch cleanup remains active only for the current generation.
+- Expanded dashboard cleanup to reset summary, account/category data, all count/display fields, cache markers, insights, and errors. Expanded ledger cleanup to reset the selected transaction, selected amount/date/direction displays, and errors.
+- Added regression coverage for late dashboard/insights/ledger responses, loading protection, and complete private-state cleanup.
+
+## Verification output
+
+- `npm test -- --runInBand tests/ledger-list.test.ts tests/dashboard-page.test.ts` — PASS, 2 suites / 15 tests.
+- `npm test -- --runInBand` — PASS, 25 suites / 86 tests.
+- `npm run build:wechat` — PASS, `tsc -p tsconfig.miniprogram.json` exit code 0.
+- `npm run typecheck` — PASS, `tsc --noEmit` exit code 0.
+- `git diff --check` — PASS, exit code 0. Git emitted only existing LF/CRLF conversion warnings.

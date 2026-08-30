@@ -61,6 +61,7 @@ class LedgerListPageModel {
         this.now = now;
         this.cache = cache;
         this.householdId = householdId;
+        this.requestGeneration = 0;
         this.state = {
             periodMode: 'month', period: { from: '', to: '' }, customFrom: '', customTo: '',
             transactions: [], selectedTransaction: null, selectedAmountDisplay: '', selectedDateDisplay: '', selectedDirectionLabel: '', loading: false, error: '',
@@ -89,6 +90,7 @@ class LedgerListPageModel {
     }
     async load(period) {
         var _a, _b;
+        const generation = ++this.requestGeneration;
         this.state.period = period;
         const scope = this.householdId();
         const cacheKey = this.cacheKey(period, scope);
@@ -97,6 +99,8 @@ class LedgerListPageModel {
         this.state.selectedTransaction = null;
         try {
             const transactions = await this.api.fetchTransactions(period);
+            if (generation !== this.requestGeneration)
+                return false;
             if (scope !== this.householdId()) {
                 this.clearPrivateState();
                 return false;
@@ -111,6 +115,8 @@ class LedgerListPageModel {
             return true;
         }
         catch (error) {
+            if (generation !== this.requestGeneration)
+                return false;
             if (scope !== this.householdId()) {
                 this.clearPrivateState();
                 return false;
@@ -125,7 +131,8 @@ class LedgerListPageModel {
             return false;
         }
         finally {
-            this.state.loading = false;
+            if (generation === this.requestGeneration)
+                this.state.loading = false;
         }
     }
     selectTransaction(id) {
@@ -143,7 +150,14 @@ class LedgerListPageModel {
     setCustomFrom(value) { this.state.customFrom = value; }
     setCustomTo(value) { this.state.customTo = value; }
     cacheKey(period, scope = this.householdId()) { return `ledger:${scope}:${period.from}:${period.to}`; }
-    clearPrivateState() { this.state.transactions = []; this.state.selectedTransaction = null; this.state.error = ''; }
+    clearPrivateState() {
+        this.state.transactions = [];
+        this.state.selectedTransaction = null;
+        this.state.selectedAmountDisplay = '';
+        this.state.selectedDateDisplay = '';
+        this.state.selectedDirectionLabel = '';
+        this.state.error = '';
+    }
     shiftMonth(delta) {
         const current = this.state.periodMode === 'month' ? this.state.period.from : this.currentPeriod().from;
         const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Auckland', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(current));

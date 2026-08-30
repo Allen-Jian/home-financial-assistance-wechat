@@ -45,6 +45,8 @@ interface PageContext { setData(data: unknown): void }
 const CACHE_TTL = 5 * 60_000;
 
 export class DashboardPageModel {
+  private requestGeneration = 0;
+
   state: DashboardState = {
     loading: false, error: '', summary: null, accounts: [], categories: [],
     pendingDraftCount: 0, duplicateCount: 0, recurringDueCount: 0, recentTransactions: [],
@@ -54,6 +56,7 @@ export class DashboardPageModel {
   constructor(private readonly api: DashboardApiPort, private readonly cache?: ReadCache, private readonly householdId: () => string = () => 'anonymous') {}
 
   async load(period: PeriodQuery): Promise<void> {
+    const generation = ++this.requestGeneration;
     const scope = this.householdId();
     const cacheKey = `dashboard:${scope}:${period.from}:${period.to}`;
     this.state.loading = true;
@@ -62,13 +65,15 @@ export class DashboardPageModel {
       const [summary, accounts, categories] = await Promise.all([
         this.api.fetchSummary(period), this.api.fetchAccounts(), this.api.fetchCategories(),
       ]);
+      if (generation !== this.requestGeneration) return;
       if (scope !== this.householdId()) { this.clearPrivateState(); return; }
       this.applySummary(summary, false);
       this.state.accounts = accounts;
       this.state.categories = categories;
       this.cache?.set(cacheKey, summary);
-      await this.loadInsights(scope);
+      await this.loadInsights(scope, generation);
     } catch (error) {
+      if (generation !== this.requestGeneration) return;
       if (scope !== this.householdId()) { this.clearPrivateState(); return; }
       const cached = error instanceof ApiError && (error.code === 'network' || error.code === 'timeout')
         ? this.cache?.read<DashboardSummary>(cacheKey, CACHE_TTL)
@@ -79,20 +84,22 @@ export class DashboardPageModel {
         this.state.error = error instanceof Error ? error.message : '加载驾驶舱失败';
       }
     } finally {
-      this.state.loading = false;
+      if (generation === this.requestGeneration) this.state.loading = false;
     }
   }
 
-  private async loadInsights(scope = this.householdId()): Promise<void> {
+  private async loadInsights(scope: string, generation: number): Promise<void> {
     if (!this.api.fetchAiInsights) return;
     const cacheKey = `dashboard:${scope}:ai-insights`;
     try {
       const insights = await this.api.fetchAiInsights();
+      if (generation !== this.requestGeneration) return;
       if (scope !== this.householdId()) { this.clearPrivateState(); return; }
       this.state.insights = insights;
       this.state.insightsFromCache = false;
       this.cache?.set(cacheKey, insights);
     } catch (error) {
+      if (generation !== this.requestGeneration) return;
       if (scope !== this.householdId()) { this.clearPrivateState(); return; }
       const cached = error instanceof ApiError && (error.code === 'network' || error.code === 'timeout') ? this.cache?.read<AiInsight[]>(cacheKey, CACHE_TTL) : null;
       if (cached) { this.state.insights = cached.data; this.state.insightsFromCache = true; }
@@ -119,9 +126,18 @@ export class DashboardPageModel {
     this.state.summary = null;
     this.state.accounts = [];
     this.state.categories = [];
+    this.state.pendingDraftCount = 0;
+    this.state.duplicateCount = 0;
+    this.state.recurringDueCount = 0;
     this.state.recentTransactions = [];
+    this.state.fromCache = false;
     this.state.insights = [];
+    this.state.insightsFromCache = false;
+    this.state.error = '';
     this.state.netWorthDisplay = '--';
+    this.state.totalAssetsDisplay = '--';
+    this.state.initialAssetsDisplay = '--';
+    this.state.termDepositDisplay = '--';
     this.state.incomeDisplay = '--';
     this.state.expenseDisplay = '--';
     this.state.cacheLabel = '';
