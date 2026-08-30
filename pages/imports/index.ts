@@ -14,6 +14,7 @@ export interface PickedImportFile {
 
 export interface ImportPickerPort {
   chooseMedia(): Promise<PickedImportFile>;
+  chooseAlbum(): Promise<PickedImportFile>;
   chooseMessageFile(): Promise<PickedImportFile>;
   readFile(path: string): Promise<Uint8Array | ArrayBuffer | string>;
 }
@@ -69,7 +70,12 @@ function toPickedFile(file: WxFileRuntime, fallbackType: string): PickedImportFi
 function createImportPicker(): ImportPickerPort {
   return {
     chooseMedia: () => new Promise((resolve, reject) => wx.chooseMedia({
-      count: 1, mediaType: ['image'], sourceType: ['camera', 'album'],
+      count: 1, mediaType: ['image'], sourceType: ['camera'],
+      success: (result) => resolve(toPickedFile(result.tempFiles[0] ?? {}, 'image/jpeg')),
+      fail: reject,
+    })),
+    chooseAlbum: () => new Promise((resolve, reject) => wx.chooseMedia({
+      count: 1, mediaType: ['image'], sourceType: ['album'],
       success: (result) => resolve(toPickedFile(result.tempFiles[0] ?? {}, 'image/jpeg')),
       fail: reject,
     })),
@@ -124,6 +130,8 @@ export class ImportPageModel {
   ) {}
 
   choosePhoto(): Promise<boolean> { return this.select(this.picker.chooseMedia(), 'manual-photo'); }
+
+  chooseAlbum(): Promise<boolean> { return this.select(this.picker.chooseAlbum(), 'manual-photo'); }
 
   async chooseFile(): Promise<boolean> {
     try {
@@ -229,6 +237,7 @@ export function createImportPage(model: ImportPageModel) {
   return {
     data: model.state,
     async choosePhoto(this: PageContext) { await model.choosePhoto(); this.setData(model.state); },
+    async chooseAlbum(this: PageContext) { await model.chooseAlbum(); this.setData(model.state); },
     async chooseFile(this: PageContext) { await model.chooseFile(); this.setData(model.state); },
     async chooseCsv(this: PageContext) { await model.chooseCsv(); this.setData(model.state); },
     async parseText(this: PageContext, event: { detail?: { value?: string } }) { await model.parseText(event.detail?.value ?? ''); this.setData(model.state); },

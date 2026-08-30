@@ -4,7 +4,7 @@ import { ImportPageModel } from '../pages/imports';
 
 function picker(): ImportPickerPort {
   const file: PickedImportFile = { path: '/tmp/receipt.jpg', name: 'receipt.jpg', size: 3, contentType: 'image/jpeg', bytes: new Uint8Array([0xff, 0xd8, 0xff]) };
-  return { chooseMedia: async () => file, chooseMessageFile: async () => file, readFile: async () => file.bytes! };
+  return { chooseMedia: async () => file, chooseAlbum: async () => file, chooseMessageFile: async () => file, readFile: async () => file.bytes! };
 }
 
 test('natural-language input becomes the same staged draft as a document preview', async () => {

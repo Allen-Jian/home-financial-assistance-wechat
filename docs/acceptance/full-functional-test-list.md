@@ -53,6 +53,12 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 
 ## 功能清单
 
+### Task 8 导入入口记录（2026-08-30）
+
+导入工作台现在明确提供“拍照、相册、微信文件、CSV”四个入口：拍照使用 `wx.chooseMedia` 的 camera-only 来源，相册使用 album-only 来源，微信文件与 CSV 继续使用 `wx.chooseMessageFile`（仅表示微信会话文件选择，不是通用 OS 文件选择器）。20 MB 限制、签名校验、哈希幂等 staging、staging 后附件上传，以及 AI 失败保留原件/重试或手工输入链路保持不变。
+
+自动化验证已覆盖入口模型与安全链路；微信开发者工具编译、相册/相机/微信文件选择器实际打开、相机权限、取消选择和真实票据仍需在 DevTools 与真机完成。
+
 | ID | 功能 | 验收标准 | 方式 | 本轮结果 |
 |---|---|---|---|---|
 | CFG-01 | 服务端 MiniMax 配置 | 密钥只从后端环境变量读取；缺失时清晰返回 503 | 自动 | 自动通过 |
@@ -77,7 +83,7 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 | TXN-05 | 版本删除 | 软删除要求 expectedVersion；冲突不覆盖 | 自动 | 自动通过 |
 | DUP-01 | 重复候选 | 同方向同金额、日期 ±3 天生成候选 | 自动 | 自动通过 |
 | DUP-02 | 人工决定 | 仅提供“稍后处理”和“保留两笔”；不自动删除 | 自动+手工 | 自动通过；手工待测 |
-| IMP-01 | 文件选择 | 支持 JPEG、PNG、PDF、CSV，最大 20 MB | 自动+手工 | 自动通过；手工待测 |
+| IMP-01 | 文件选择 | 拍照、相册、微信文件、CSV 分入口；支持 JPEG、PNG、PDF、CSV，最大 20 MB | 自动+手工 | 自动通过；DevTools/真机待测 |
 | IMP-02 | 文件真实性 | 扩展名/MIME 与签名不匹配时拒绝 | 自动 | 自动通过 |
 | IMP-03 | 文件哈希幂等 | 同家庭同文件哈希重用批次，不重复 staging | 自动 | 自动通过 |
 | IMP-04 | ANZ CSV | 支持单金额列及 debit/credit 列，保留引号商户 | 自动+真实 | 自动通过；真实样本待测 |

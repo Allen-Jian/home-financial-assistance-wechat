@@ -7,6 +7,7 @@ const csv: PickedImportFile = { path: '/tmp/anz.csv', name: 'anz.csv', size: 512
 function makeModel(files: PickedImportFile[] = [image]) {
   const picker = {
     chooseMedia: jest.fn().mockResolvedValue(files[0]),
+    chooseAlbum: jest.fn().mockResolvedValue(files[0]),
     chooseMessageFile: jest.fn().mockResolvedValue(files[0]),
     readFile: jest.fn().mockImplementation(async (file: PickedImportFile) => file.bytes ?? file.text ?? ''),
   };
@@ -31,6 +32,13 @@ test('supports image, PDF, and CSV selection in one workbench', async () => {
   picker.chooseMessageFile.mockResolvedValueOnce(csv);
   await expect(model.chooseCsv()).resolves.toBe(true);
   expect(model.state.sourceType).toBe('anz-csv');
+});
+
+test('album selection is distinct from camera and WeChat file selection', async () => {
+  const { model, picker } = makeModel([image]);
+  await expect(model.chooseAlbum()).resolves.toBe(true);
+  expect(picker.chooseAlbum).toHaveBeenCalledTimes(1);
+  expect(model.state.sourceType).toBe('manual-photo');
 });
 
 test('rejects files over 20 MB or with a mismatched signature', async () => {

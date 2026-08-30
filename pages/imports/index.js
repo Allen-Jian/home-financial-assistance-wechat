@@ -14,7 +14,12 @@ function toPickedFile(file, fallbackType) {
 function createImportPicker() {
     return {
         chooseMedia: () => new Promise((resolve, reject) => wx.chooseMedia({
-            count: 1, mediaType: ['image'], sourceType: ['camera', 'album'],
+            count: 1, mediaType: ['image'], sourceType: ['camera'],
+            success: (result) => { var _a; return resolve(toPickedFile((_a = result.tempFiles[0]) !== null && _a !== void 0 ? _a : {}, 'image/jpeg')); },
+            fail: reject,
+        })),
+        chooseAlbum: () => new Promise((resolve, reject) => wx.chooseMedia({
+            count: 1, mediaType: ['image'], sourceType: ['album'],
             success: (result) => { var _a; return resolve(toPickedFile((_a = result.tempFiles[0]) !== null && _a !== void 0 ? _a : {}, 'image/jpeg')); },
             fail: reject,
         })),
@@ -65,6 +70,7 @@ class ImportPageModel {
         this.staged = new Map();
     }
     choosePhoto() { return this.select(this.picker.chooseMedia(), 'manual-photo'); }
+    chooseAlbum() { return this.select(this.picker.chooseAlbum(), 'manual-photo'); }
     async chooseFile() {
         try {
             const file = await this.picker.chooseMessageFile();
@@ -182,6 +188,7 @@ function createImportPage(model) {
     return {
         data: model.state,
         async choosePhoto() { await model.choosePhoto(); this.setData(model.state); },
+        async chooseAlbum() { await model.chooseAlbum(); this.setData(model.state); },
         async chooseFile() { await model.chooseFile(); this.setData(model.state); },
         async chooseCsv() { await model.chooseCsv(); this.setData(model.state); },
         async parseText(event) { var _a, _b; await model.parseText((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); this.setData(model.state); },

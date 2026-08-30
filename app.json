@@ -24,6 +24,11 @@
     "backgroundColor": "#F3F7FF",
     "backgroundTextStyle": "light"
   },
+  "permission": {
+    "scope.camera": {
+      "desc": "用于拍照导入账单原件"
+    }
+  },
   "darkmode": true,
   "tabBar": {
     "color": "#6B7E9E",
