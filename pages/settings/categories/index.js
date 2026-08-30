@@ -16,7 +16,7 @@ class CategorySettingsModel {
         this.state.loading = true;
         this.state.error = '';
         try {
-            this.state.categories = await this.api.fetchCategories();
+            this.state.categories = await this.api.fetchCategories(true);
         }
         catch (error) {
             this.state.error = error instanceof Error ? error.message : '加载分类失败';

@@ -28,7 +28,7 @@ export class AssetSettingsModel {
     this.state.error = '';
     try {
       const accounts = await this.api.fetchAccounts();
-      this.state.primary = accounts.find((account) => account.systemKey === 'PRIMARY') ?? accounts.find((account) => account.kind === 'asset') ?? null;
+      this.state.primary = accounts.find((account) => account.systemKey === 'PRIMARY') ?? null;
       if (this.state.primary) this.state.amount = (this.state.primary.openingBalanceMinor / 100).toFixed(2);
     } catch (error) { this.state.error = error instanceof Error ? error.message : '加载初始资产失败'; }
     finally { this.state.loading = false; }

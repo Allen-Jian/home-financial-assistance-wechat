@@ -43,6 +43,13 @@ describe('ApiClient', () => {
     expect(fake.requests[0].url).toBe('https://ledger.test/v1/reports/summary?from=a&to=b');
   });
 
+  test('requests inactive categories only when settings explicitly include them', async () => {
+    const fake = new FakeWx([{ statusCode: 200, data: [] }]);
+    const { client } = makeClient(fake);
+    await expect(client.fetchCategories(true)).resolves.toEqual([]);
+    expect(fake.requests[0].url).toBe('https://ledger.test/v1/categories?includeInactive=true');
+  });
+
   test('refreshes once after a read 401 and replays the read', async () => {
     const fake = new FakeWx([
       { statusCode: 401, data: { message: 'expired' } },

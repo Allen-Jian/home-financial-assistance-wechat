@@ -11,12 +11,12 @@ class AssetSettingsModel {
     }
     setAmount(amount) { this.state.amount = amount; }
     async load() {
-        var _a, _b;
+        var _a;
         this.state.loading = true;
         this.state.error = '';
         try {
             const accounts = await this.api.fetchAccounts();
-            this.state.primary = (_b = (_a = accounts.find((account) => account.systemKey === 'PRIMARY')) !== null && _a !== void 0 ? _a : accounts.find((account) => account.kind === 'asset')) !== null && _b !== void 0 ? _b : null;
+            this.state.primary = (_a = accounts.find((account) => account.systemKey === 'PRIMARY')) !== null && _a !== void 0 ? _a : null;
             if (this.state.primary)
                 this.state.amount = (this.state.primary.openingBalanceMinor / 100).toFixed(2);
         }

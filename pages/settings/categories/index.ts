@@ -4,7 +4,7 @@ import { getRuntime } from '../../../app';
 export type CategoryDirection = 'income' | 'expense';
 export interface CategorySettingsApiPort {
   updateCategory(id: string, input: { name?: string; active?: boolean }): Promise<CategorySummary>;
-  fetchCategories?: () => Promise<CategorySummary[]>;
+  fetchCategories?: (includeInactive?: boolean) => Promise<CategorySummary[]>;
   createCategory?: (input: { name: string; direction: CategoryDirection }) => Promise<CategorySummary>;
 }
 
@@ -29,7 +29,7 @@ export class CategorySettingsModel {
     if (!this.api.fetchCategories) return;
     this.state.loading = true;
     this.state.error = '';
-    try { this.state.categories = await this.api.fetchCategories(); }
+    try { this.state.categories = await this.api.fetchCategories(true); }
     catch (error) { this.state.error = error instanceof Error ? error.message : '加载分类失败'; }
     finally { this.state.loading = false; }
   }

@@ -186,7 +186,9 @@ export class ApiClient {
   fetchSummary(period: Query = {}): Promise<DashboardSummary> { return this.get('/reports/summary', period); }
   fetchReports(period: Query): Promise<ReportSummary> { return this.get('/reports/summary', period); }
   fetchAccounts<T = unknown>(): Promise<T> { return this.get('/accounts'); }
-  fetchCategories<T = unknown>(): Promise<T> { return this.get('/categories'); }
+  fetchCategories<T = unknown>(includeInactive = false): Promise<T> {
+    return this.get('/categories', includeInactive ? { includeInactive: true } : {});
+  }
   createCategory<T = unknown>(input: JsonObject): Promise<T> { return this.post('/categories', input); }
   updateCategory<T = unknown>(id: string, input: JsonObject): Promise<T> { return this.patch(`/categories/${encodeURIComponent(id)}`, input); }
   setInitialAsset<T = unknown>(amountMinor: number, expectedVersion: number): Promise<T> {

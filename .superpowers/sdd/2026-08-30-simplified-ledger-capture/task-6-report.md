@@ -25,3 +25,9 @@ Status: complete
 
 - Only the WeChat mini-program repository was changed; the API repository was not modified.
 - Real WeChat DevTools/device, live API, and owner-permission acceptance were not run locally.
+
+## Review follow-up
+
+- Settings category loads now request `includeInactive=true`, so inactive categories remain visible after reload and can be re-enabled.
+- Initial asset settings now accepts only the API's `systemKey=PRIMARY` account and never substitutes an arbitrary asset account.
+- Added regression coverage for category deactivate/reload/reactivate, the inactive-category query, and missing PRIMARY behavior.

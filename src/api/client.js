@@ -120,7 +120,9 @@ class ApiClient {
     fetchSummary(period = {}) { return this.get('/reports/summary', period); }
     fetchReports(period) { return this.get('/reports/summary', period); }
     fetchAccounts() { return this.get('/accounts'); }
-    fetchCategories() { return this.get('/categories'); }
+    fetchCategories(includeInactive = false) {
+        return this.get('/categories', includeInactive ? { includeInactive: true } : {});
+    }
     createCategory(input) { return this.post('/categories', input); }
     updateCategory(id, input) { return this.patch(`/categories/${encodeURIComponent(id)}`, input); }
     setInitialAsset(amountMinor, expectedVersion) {
