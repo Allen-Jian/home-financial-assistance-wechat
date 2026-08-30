@@ -2,7 +2,7 @@
   <view class="page-title"><text>记一笔</text><text class="sub">选择适合你的记录方式</text></view>
   <view class="entry-card photo-card" bindtap="openPhoto">
     <text class="entry-icon">📷</text>
-    <view class="entry-copy"><text class="entry-title">拍照记账</text><text class="entry-detail">拍照或从相册选图，AI 帮你生成草稿</text></view>
+    <view class="entry-copy"><text class="entry-title">拍照记账</text><text class="entry-detail">拍照，AI 帮你生成草稿</text></view>
     <text class="entry-arrow">›</text>
   </view>
   <view class="entry-card manual-card" bindtap="openManual">

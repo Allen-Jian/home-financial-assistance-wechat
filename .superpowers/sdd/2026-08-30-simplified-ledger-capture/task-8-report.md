@@ -66,3 +66,10 @@ git diff --check
 - 在 `tests/photo-entry.test.ts` 增加 picker 行为回归测试，验证请求不包含 `album`。
 
 验证：`npm test -- --runInBand tests/photo-entry.test.ts`（9 tests PASS）、`npm run typecheck`、`npm run build:wechat`、`git diff --check` 均成功。DevTools/真机相机实际打开仍属于外部验收门槛。
+
+## Scoped re-review 修复：入口文案与 camera-only 行为对齐（2026-08-30）
+
+- 更新 `pages/entry/index.wxml`：将“拍照或从相册选图，AI 帮你生成草稿”改为“拍照，AI 帮你生成草稿”。
+- 在 `tests/entry-page.test.ts` 增加静态文案回归断言，禁止入口继续声称支持相册选择。
+
+验证：入口测试、全量测试、类型检查、微信构建及 `git diff --check` 均成功。
