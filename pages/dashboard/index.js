@@ -14,7 +14,7 @@ class DashboardPageModel {
         this.state = {
             loading: false, error: '', summary: null, accounts: [], categories: [],
             pendingDraftCount: 0, duplicateCount: 0, recurringDueCount: 0, recentTransactions: [],
-            fromCache: false, cacheLabel: '', netWorthDisplay: '--', incomeDisplay: '--', expenseDisplay: '--', insights: [], insightsFromCache: false,
+            fromCache: false, cacheLabel: '', netWorthDisplay: '--', totalAssetsDisplay: '--', initialAssetsDisplay: '--', termDepositDisplay: '--', incomeDisplay: '--', expenseDisplay: '--', insights: [], insightsFromCache: false,
         };
     }
     async load(period) {
@@ -67,13 +67,16 @@ class DashboardPageModel {
         }
     }
     applySummary(summary, fromCache) {
-        var _a, _b, _c, _d;
+        var _a, _b, _c, _d, _e, _f, _g;
         this.state.summary = summary;
         this.state.pendingDraftCount = (_a = summary.pendingDraftCount) !== null && _a !== void 0 ? _a : 0;
         this.state.duplicateCount = (_b = summary.duplicateCount) !== null && _b !== void 0 ? _b : 0;
         this.state.recurringDueCount = (_c = summary.recurringDueCount) !== null && _c !== void 0 ? _c : 0;
         this.state.recentTransactions = (_d = summary.recentTransactions) !== null && _d !== void 0 ? _d : [];
         this.state.netWorthDisplay = (0, money_1.formatNzdMinor)(summary.netWorthMinor);
+        this.state.totalAssetsDisplay = (0, money_1.formatNzdMinor)((_e = summary.totalAssetsMinor) !== null && _e !== void 0 ? _e : summary.netWorthMinor);
+        this.state.initialAssetsDisplay = (0, money_1.formatNzdMinor)((_f = summary.initialAssetsMinor) !== null && _f !== void 0 ? _f : 0);
+        this.state.termDepositDisplay = (0, money_1.formatNzdMinor)((_g = summary.termDepositMinor) !== null && _g !== void 0 ? _g : 0);
         this.state.incomeDisplay = (0, money_1.formatNzdMinor)(summary.incomeMinor);
         this.state.expenseDisplay = (0, money_1.formatNzdMinor)(summary.expenseMinor);
         this.state.fromCache = fromCache;

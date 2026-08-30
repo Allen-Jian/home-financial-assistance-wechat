@@ -1,7 +1,126 @@
 import { ApiError } from '../../src/api/client';
-import { parseNzdMinor } from '../../src/domain/money';
+import { formatNzdMinor, parseNzdMinor } from '../../src/domain/money';
 import type { AccountSummary, CategorySummary } from '../../src/api/contracts';
+import type { TransactionSummary } from '../../src/api/contracts';
 import { getRuntime } from '../../app';
+import { getPeriodBounds } from '../../src/domain/period';
+
+export type LedgerPeriodMode = 'month' | 'year' | 'custom';
+export interface LedgerPeriodQuery { from: string; to: string }
+export interface LedgerListItem extends TransactionSummary {
+  amountDisplay: string;
+  dateDisplay: string;
+  directionLabel: string;
+}
+export interface LedgerListApiPort {
+  fetchTransactions(period: LedgerPeriodQuery): Promise<TransactionSummary[]>;
+}
+export interface LedgerListState {
+  periodMode: LedgerPeriodMode;
+  period: LedgerPeriodQuery;
+  customFrom: string;
+  customTo: string;
+  transactions: LedgerListItem[];
+  selectedTransaction: TransactionSummary | null;
+  loading: boolean;
+  error: string;
+}
+
+const directionLabels: Record<TransactionSummary['direction'], string> = {
+  income: '收入', expense: '支出', transfer: '转账', adjustment: '调整',
+};
+
+function currentAucklandDate(): Date { return new Date(); }
+
+function aucklandBoundary(value: Date): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Pacific/Auckland', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(value);
+  const read = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+  const year = read('year');
+  const month = read('month');
+  const day = read('day');
+  const hour = read('hour') === 24 ? 0 : read('hour');
+  const minute = read('minute');
+  const second = read('second');
+  const localTimestamp = Date.UTC(year, month - 1, day, hour, minute, second);
+  const offsetMinutes = Math.round((localTimestamp - value.valueOf()) / 60_000);
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const absoluteOffset = Math.abs(offsetMinutes);
+  const offset = `${sign}${String(Math.floor(absoluteOffset / 60)).padStart(2, '0')}:${String(absoluteOffset % 60).padStart(2, '0')}`;
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}${offset}`;
+}
+
+function toDisplayDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return value;
+  return new Intl.DateTimeFormat('zh-CN', { timeZone: 'Pacific/Auckland', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+}
+
+export class LedgerListPageModel {
+  state: LedgerListState = {
+    periodMode: 'month', period: { from: '', to: '' }, customFrom: '', customTo: '',
+    transactions: [], selectedTransaction: null, loading: false, error: '',
+  };
+
+  constructor(private readonly api: LedgerListApiPort, private readonly now: () => Date = currentAucklandDate) {
+    const period = this.currentPeriod();
+    this.state.period = period;
+  }
+
+  currentPeriod(): LedgerPeriodQuery {
+    if (this.state.periodMode === 'custom' && this.state.customFrom && this.state.customTo) {
+      return { from: this.state.customFrom, to: this.state.customTo };
+    }
+    const kind = this.state.periodMode === 'year' ? 'year' : 'month';
+    const bounds = getPeriodBounds(this.now(), kind);
+    return { from: aucklandBoundary(bounds.from), to: aucklandBoundary(bounds.to) };
+  }
+
+  setPeriod(mode: LedgerPeriodMode, from?: string, to?: string): void {
+    this.state.periodMode = mode;
+    if (mode === 'custom') {
+      this.state.customFrom = from ?? this.state.customFrom;
+      this.state.customTo = to ?? this.state.customTo;
+      if (this.state.customFrom && this.state.customTo) this.state.period = { from: this.state.customFrom, to: this.state.customTo };
+      return;
+    }
+    this.state.period = this.currentPeriod();
+  }
+
+  async load(period: LedgerPeriodQuery): Promise<boolean> {
+    this.state.period = period;
+    this.state.loading = true;
+    this.state.error = '';
+    this.state.selectedTransaction = null;
+    try {
+      const transactions = await this.api.fetchTransactions(period);
+      this.state.transactions = transactions.map((transaction) => ({
+        ...transaction,
+        amountDisplay: formatNzdMinor(transaction.amountMinor),
+        dateDisplay: toDisplayDate(transaction.occurredAt),
+        directionLabel: directionLabels[transaction.direction],
+      }));
+      return true;
+    } catch (error) {
+      this.state.error = error instanceof Error ? error.message : '加载账目失败';
+      return false;
+    } finally {
+      this.state.loading = false;
+    }
+  }
+
+  selectTransaction(id: string): void {
+    const selected = this.state.transactions.find((transaction) => transaction.id === id);
+    if (!selected) { this.state.selectedTransaction = null; return; }
+    const { amountDisplay: _amountDisplay, dateDisplay: _dateDisplay, directionLabel: _directionLabel, ...transaction } = selected;
+    this.state.selectedTransaction = transaction;
+  }
+
+  setCustomFrom(value: string): void { this.state.customFrom = value; }
+  setCustomTo(value: string): void { this.state.customTo = value; }
+}
 
 export type LedgerDirection = 'income' | 'expense' | 'transfer' | 'adjustment';
 export type DuplicateAction = 'later' | 'keep-both';
@@ -140,10 +259,57 @@ export function createLedgerPage(model: LedgerPageModel) {
   };
 }
 
+export function createLedgerListPage(model: LedgerListPageModel) {
+  return {
+    data: model.state,
+    async onShow(this: PageContext) {
+      await model.load(model.currentPeriod());
+      this.setData(model.state);
+    },
+    async changePeriod(this: PageContext, event: { currentTarget?: { dataset?: { mode?: string } } }) {
+      const mode = event.currentTarget?.dataset?.mode;
+      if (mode === 'month' || mode === 'year') {
+        model.setPeriod(mode);
+        await model.load(model.currentPeriod());
+      } else if (mode === 'custom') {
+        model.setPeriod('custom');
+      }
+      this.setData(model.state);
+    },
+    async applyCustomPeriod(this: PageContext) {
+      if (!model.state.customFrom || !model.state.customTo) {
+        model.state.error = '请选择完整的起止日期';
+      } else if (model.state.customFrom > model.state.customTo) {
+        model.state.error = '开始日期不能晚于结束日期';
+      } else {
+        model.setPeriod('custom', model.state.customFrom, model.state.customTo);
+        await model.load(model.state.period);
+      }
+      this.setData(model.state);
+    },
+    onCustomFrom(this: PageContext, event: { detail?: { value?: string } }) {
+      model.setCustomFrom(event.detail?.value ?? '');
+      this.setData(model.state);
+    },
+    onCustomTo(this: PageContext, event: { detail?: { value?: string } }) {
+      model.setCustomTo(event.detail?.value ?? '');
+      this.setData(model.state);
+    },
+    openDetail(this: PageContext, event: { currentTarget?: { dataset?: { id?: string } } }) {
+      model.selectTransaction(event.currentTarget?.dataset?.id ?? '');
+      this.setData(model.state);
+    },
+    closeDetail(this: PageContext) {
+      model.state.selectedTransaction = null;
+      this.setData(model.state);
+    },
+  };
+}
+
 declare function Page(options: Record<string, unknown>): void;
 declare function getApp<T>(): T;
 declare const wx: { navigateTo(options: { url: string }): void };
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  Page(createLedgerPage(new LedgerPageModel(runtime.api as unknown as LedgerApiPort)));
+  Page(createLedgerListPage(new LedgerListPageModel(runtime.api as unknown as LedgerListApiPort)));
 }

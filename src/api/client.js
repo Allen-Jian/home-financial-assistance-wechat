@@ -141,6 +141,7 @@ class ApiClient {
     createRecurring(input) { return this.post('/recurring', input); }
     advanceRecurring(id) { return this.post(`/recurring/${encodeURIComponent(id)}/advance`); }
     createTransaction(input) { return this.post('/transactions', input); }
+    fetchTransactions(period) { return this.get('/transactions', period); }
     stageImport(input) { return this.post('/imports/stage', input); }
     confirmDraft(draftId, input = {}) { return this.post(`/drafts/${encodeURIComponent(draftId)}/confirm`, input); }
     previewDuplicates(input) { return this.post('/duplicate-candidates/preview', input); }

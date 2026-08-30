@@ -25,6 +25,9 @@ export interface BreakdownRow {
 
 export interface DashboardSummary {
   netWorthMinor: number;
+  totalAssetsMinor?: number;
+  initialAssetsMinor?: number;
+  termDepositMinor?: number;
   incomeMinor: number;
   expenseMinor: number;
   categoryBreakdown: BreakdownRow[];

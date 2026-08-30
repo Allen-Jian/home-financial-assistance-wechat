@@ -1,13 +1,29 @@
-<view class="page ledger-page">
-  <view class="page-title"><text>快速记账</text><text class="sub">保存前会检查重复</text></view>
-  <view class="direction-switch"><button bindtap="onDirectionChange" class="{{direction === 'expense' ? 'active' : ''}}" data-value="expense">支出</button><button bindtap="onDirectionChange" class="{{direction === 'income' ? 'active' : ''}}" data-value="income">收入</button><button bindtap="onDirectionChange" class="{{direction === 'transfer' ? 'active' : ''}}" data-value="transfer">转账</button></view>
-  <view class="amount-box"><text class="currency">NZ$</text><input bindinput="onAmountInput" class="amount-input" type="digit" placeholder="0.00" value="{{amount}}" /></view>
-  <view class="field-row"><text>账户</text><picker bindchange="onAccountChange" mode="selector" range="{{accounts}}" range-key="name"><text class="picker-value">{{accountName || '选择账户'}}</text></picker></view>
-  <view class="field-row"><text>分类</text><picker bindchange="onCategoryChange" mode="selector" range="{{categories}}" range-key="name"><text class="picker-value">{{categoryName || '选择分类'}}</text></picker></view>
-  <view class="field-row"><text>日期</text><picker bindchange="onDateChange" mode="date" value="{{occurredAt}}"><text class="picker-value">{{occurredAt}}</text></picker></view>
-  <textarea bindinput="onNoteInput" class="note" placeholder="备注（可选）" value="{{note}}"></textarea>
-  <button class="attachment" bindtap="openImports">📎 添加小票或单据</button>
+<view class="page ledger-list-page">
+  <view class="page-title"><text>账目</text><text class="sub">只读查看已确认的收入与支出</text></view>
+  <view class="period-tabs">
+    <button bindtap="changePeriod" data-mode="month" class="{{periodMode === 'month' ? 'active' : ''}}">本月</button>
+    <button bindtap="changePeriod" data-mode="year" class="{{periodMode === 'year' ? 'active' : ''}}">本年</button>
+    <button bindtap="changePeriod" data-mode="custom" class="{{periodMode === 'custom' ? 'active' : ''}}">自定义</button>
+  </view>
+  <view wx:if="{{periodMode === 'custom'}}" class="custom-period">
+    <picker mode="date" value="{{customFrom}}" bindchange="onCustomFrom"><view class="date-picker">{{customFrom || '开始日期'}}</view></picker>
+    <text class="date-separator">至</text>
+    <picker mode="date" value="{{customTo}}" bindchange="onCustomTo"><view class="date-picker">{{customTo || '结束日期'}}</view></picker>
+    <button bindtap="applyCustomPeriod" class="apply-button">应用</button>
+  </view>
+  <view wx:if="{{loading}}" class="status">正在加载账目…</view>
   <text wx:if="{{error}}" class="error">{{error}}</text>
-  <view wx:if="{{duplicateActions.length}}" class="duplicate-panel"><text class="duplicate-title">发现可能重复</text><text class="duplicate-detail">请确认是否与已有账目相同</text><view class="duplicate-actions"><button bindtap="later">稍后处理</button><button class="primary-button" bindtap="keepBoth">保留两笔</button></view></view>
-  <button bindtap="save" class="primary-button save-button">保存账目</button>
+  <view wx:if="{{!loading && transactions.length === 0}}" class="empty">这个期间还没有账目</view>
+  <view wx:for="{{transactions}}" wx:key="id" class="transaction-card" bindtap="openDetail" data-id="{{item.id}}">
+    <view class="transaction-main"><text class="merchant">{{item.merchant || item.note || '未命名账目'}}</text><text class="date">{{item.dateDisplay}} · {{item.directionLabel}}</text></view>
+    <text class="amount {{item.direction}}">{{item.amountDisplay}}</text>
+  </view>
+  <view wx:if="{{selectedTransaction}}" class="detail-panel">
+    <view class="detail-header"><text>账目详情</text><text bindtap="closeDetail" class="close">关闭</text></view>
+    <view class="detail-row"><text>类型</text><text>{{selectedTransaction.direction === 'income' ? '收入' : selectedTransaction.direction === 'expense' ? '支出' : selectedTransaction.direction === 'transfer' ? '转账' : '调整'}}</text></view>
+    <view class="detail-row"><text>金额</text><text>NZ$ {{selectedTransaction.amountMinor / 100}}</text></view>
+    <view class="detail-row"><text>日期</text><text>{{selectedTransaction.occurredAt}}</text></view>
+    <view wx:if="{{selectedTransaction.merchant}}" class="detail-row"><text>商户</text><text>{{selectedTransaction.merchant}}</text></view>
+    <view wx:if="{{selectedTransaction.note}}" class="detail-row"><text>备注</text><text>{{selectedTransaction.note}}</text></view>
+  </view>
 </view>

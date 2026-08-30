@@ -15,6 +15,9 @@ class MemoryStorage implements StorageLike {
 
 const summary: DashboardSummary = {
   netWorthMinor: 120_000,
+  totalAssetsMinor: 150_000,
+  initialAssetsMinor: 100_000,
+  termDepositMinor: 50_000,
   incomeMinor: 300_000,
   expenseMinor: 180_000,
   categoryBreakdown: [],
@@ -72,6 +75,9 @@ test('formats dashboard amounts before they reach the WXML template', async () =
 
   expect(model.state).toEqual(expect.objectContaining({
     netWorthDisplay: 'NZ$1200.00',
+    totalAssetsDisplay: 'NZ$1500.00',
+    initialAssetsDisplay: 'NZ$1000.00',
+    termDepositDisplay: 'NZ$500.00',
     incomeDisplay: 'NZ$3000.00',
     expenseDisplay: 'NZ$1800.00',
   }));

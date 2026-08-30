@@ -207,6 +207,7 @@ export class ApiClient {
   createRecurring(input: JsonObject): Promise<RecurringSummary> { return this.post('/recurring', input); }
   advanceRecurring(id: string): Promise<RecurringSummary> { return this.post(`/recurring/${encodeURIComponent(id)}/advance`); }
   createTransaction<T = TransactionSummary>(input: JsonObject): Promise<T> { return this.post('/transactions', input); }
+  fetchTransactions(period: { from: string; to: string }): Promise<TransactionSummary[]> { return this.get('/transactions', period); }
   stageImport<T = unknown>(input: JsonObject): Promise<T> { return this.post('/imports/stage', input); }
   confirmDraft<T = TransactionSummary>(draftId: string, input: JsonObject = {}): Promise<T> { return this.post(`/drafts/${encodeURIComponent(draftId)}/confirm`, input); }
   previewDuplicates<T = unknown>(input: JsonObject): Promise<T> { return this.post('/duplicate-candidates/preview', input); }

@@ -31,6 +31,9 @@ export interface DashboardState {
   fromCache: boolean;
   cacheLabel: string;
   netWorthDisplay: string;
+  totalAssetsDisplay: string;
+  initialAssetsDisplay: string;
+  termDepositDisplay: string;
   incomeDisplay: string;
   expenseDisplay: string;
   insights: AiInsight[];
@@ -45,7 +48,7 @@ export class DashboardPageModel {
   state: DashboardState = {
     loading: false, error: '', summary: null, accounts: [], categories: [],
     pendingDraftCount: 0, duplicateCount: 0, recurringDueCount: 0, recentTransactions: [],
-    fromCache: false, cacheLabel: '', netWorthDisplay: '--', incomeDisplay: '--', expenseDisplay: '--', insights: [], insightsFromCache: false,
+    fromCache: false, cacheLabel: '', netWorthDisplay: '--', totalAssetsDisplay: '--', initialAssetsDisplay: '--', termDepositDisplay: '--', incomeDisplay: '--', expenseDisplay: '--', insights: [], insightsFromCache: false,
   };
 
   constructor(private readonly api: DashboardApiPort, private readonly cache?: ReadCache) {}
@@ -98,6 +101,9 @@ export class DashboardPageModel {
     this.state.recurringDueCount = summary.recurringDueCount ?? 0;
     this.state.recentTransactions = summary.recentTransactions ?? [];
     this.state.netWorthDisplay = formatNzdMinor(summary.netWorthMinor);
+    this.state.totalAssetsDisplay = formatNzdMinor(summary.totalAssetsMinor ?? summary.netWorthMinor);
+    this.state.initialAssetsDisplay = formatNzdMinor(summary.initialAssetsMinor ?? 0);
+    this.state.termDepositDisplay = formatNzdMinor(summary.termDepositMinor ?? 0);
     this.state.incomeDisplay = formatNzdMinor(summary.incomeMinor);
     this.state.expenseDisplay = formatNzdMinor(summary.expenseMinor);
     this.state.fromCache = fromCache;

@@ -6,6 +6,7 @@
 .net-worth-card { margin-top: 36rpx; padding: 34rpx; border-radius: 28rpx; color: var(--color-on-primary); background: linear-gradient(135deg, var(--color-primary), var(--color-gradient-secondary)); box-shadow: 0 16rpx 40rpx var(--shadow-primary); }
 .card-label, .card-foot { display: block; opacity: .82; font-size: 24rpx; }
 .net-worth { display: block; margin: 16rpx 0; font-size: 64rpx; font-weight: 700; }
+.asset-summary { display: flex; gap: 16rpx; margin-top: 18rpx; padding: 24rpx; border-radius: 22rpx; background: var(--color-surface); }.asset-summary > view { flex: 1; }.asset-label, .asset-value { display: block; }.asset-label { color: var(--color-muted); font-size: 22rpx; }.asset-value { margin-top: 10rpx; color: var(--color-text); font-size: 26rpx; font-weight: 700; }
 .metric-grid { display: flex; gap: 20rpx; margin-top: 20rpx; }
 .metric { flex: 1; padding: 28rpx; border-radius: 24rpx; background: var(--color-surface); }
 .metric text { display: block; color: var(--color-muted); font-size: 24rpx; }.metric text:last-child { margin-top: 12rpx; color: var(--color-text); font-size: 32rpx; font-weight: 700; }.income text:last-child { color: var(--color-income); }.expense text:last-child { color: var(--color-expense); }
