@@ -22,18 +22,23 @@ class PhotoEntryPageModel {
         this.api = api;
         this.state = {
             file: null, draft: null, draftId: '', originalPreserved: false,
-            uploaded: false, loading: false, confirmed: false, error: '',
+            uploaded: false, loading: false, confirmed: false, error: '', categories: [], categoryId: '', categoryName: '', stagedExisting: false,
         };
+        this.editedFields = new Set();
     }
     async analyze(file) {
-        var _a, _b, _c, _d, _e, _f;
+        var _a, _b, _c;
         this.state.file = file;
         this.state.originalPreserved = true;
         this.state.draft = null;
         this.state.draftId = '';
         this.state.uploaded = false;
         this.state.confirmed = false;
+        this.state.categoryId = '';
+        this.state.categoryName = '';
+        this.state.stagedExisting = false;
         this.state.error = '';
+        this.editedFields.clear();
         this.state.loading = true;
         try {
             const contentType = contentTypeFor(file);
@@ -45,9 +50,23 @@ class PhotoEntryPageModel {
                         ? await this.api.parseDraft(file.path)
                         : (() => { throw new Error('AI 分析暂不可用'); })();
             this.state.draft = draft;
+            if (this.api.fetchCategories) {
+                const categories = await this.api.fetchCategories();
+                this.state.categories = categories.filter((category) => category.active !== false);
+                const matched = this.state.categories.find((category) => category.direction === draft.direction && category.name === draft.categoryHint);
+                if (matched) {
+                    this.state.categoryId = matched.id;
+                    this.state.categoryName = matched.name;
+                    this.state.draft = { ...draft, categoryId: matched.id };
+                }
+            }
             if (this.api.stageImport && this.api.confirmDraft) {
                 const staged = await this.api.stageImport({ fileHash: hashFor(file), sourceType: 'manual-photo', draft });
-                this.state.draftId = (_f = (_d = (_c = (_a = staged.draftId) !== null && _a !== void 0 ? _a : (_b = staged.draft) === null || _b === void 0 ? void 0 : _b.id) !== null && _c !== void 0 ? _c : staged.batchId) !== null && _d !== void 0 ? _d : (_e = staged.batch) === null || _e === void 0 ? void 0 : _e.id) !== null && _f !== void 0 ? _f : '';
+                this.state.draftId = (_c = (_a = staged.draftId) !== null && _a !== void 0 ? _a : (_b = staged.draft) === null || _b === void 0 ? void 0 : _b.id) !== null && _c !== void 0 ? _c : '';
+                if (staged.reused && !this.state.draftId) {
+                    this.state.stagedExisting = true;
+                    this.state.error = '该小票已存在，请稍后处理';
+                }
                 if (!staged.reused && this.api.uploadAttachment && this.state.draftId) {
                     await this.api.uploadAttachment({ filePath: file.path, draftId: this.state.draftId, originalName: file.name, contentType });
                     this.state.uploaded = true;
@@ -64,8 +83,26 @@ class PhotoEntryPageModel {
         }
     }
     updateDraft(patch) {
-        if (this.state.draft)
+        var _a, _b;
+        if (this.state.draft) {
             this.state.draft = { ...this.state.draft, ...patch };
+            Object.keys(patch).forEach((field) => this.editedFields.add(field));
+            if (patch.categoryId !== undefined)
+                this.state.categoryId = patch.categoryId;
+            if (patch.categoryHint !== undefined) {
+                const matched = this.state.categories.find((category) => { var _a; return category.direction === ((_a = this.state.draft) === null || _a === void 0 ? void 0 : _a.direction) && category.name === patch.categoryHint; });
+                this.state.categoryId = (_a = matched === null || matched === void 0 ? void 0 : matched.id) !== null && _a !== void 0 ? _a : '';
+                this.state.categoryName = (_b = matched === null || matched === void 0 ? void 0 : matched.name) !== null && _b !== void 0 ? _b : '';
+            }
+        }
+    }
+    setCategoryByIndex(index) {
+        const category = this.state.categories[index];
+        if (category) {
+            this.state.categoryId = category.id;
+            this.state.categoryName = category.name;
+            this.updateDraft({ categoryId: category.id });
+        }
     }
     async retry() {
         if (!this.state.file)
@@ -76,6 +113,10 @@ class PhotoEntryPageModel {
         const draft = this.state.draft;
         if (!draft) {
             this.state.error = '请先分析小票';
+            return false;
+        }
+        if (this.state.stagedExisting) {
+            this.state.error = '该小票已存在，请稍后处理';
             return false;
         }
         if (!Number.isSafeInteger(draft.amountMinor) || draft.amountMinor <= 0) {
@@ -89,15 +130,7 @@ class PhotoEntryPageModel {
                 await this.api.confirmDraft(this.state.draftId, this.confirmationPayload(draft));
             }
             else if (this.api.createTransaction) {
-                const payload = { direction: draft.direction, amountMinor: draft.amountMinor };
-                if (draft.occurredAt)
-                    payload.occurredAt = draft.occurredAt;
-                if (draft.categoryHint)
-                    payload.categoryId = draft.categoryHint;
-                if (draft.merchant)
-                    payload.merchant = draft.merchant;
-                if (draft.note)
-                    payload.note = draft.note;
+                const payload = this.confirmationPayload(draft);
                 await this.api.createTransaction(payload);
             }
             else {
@@ -118,15 +151,17 @@ class PhotoEntryPageModel {
         }
     }
     confirmationPayload(draft) {
+        var _a, _b;
         const payload = { direction: draft.direction, amountMinor: draft.amountMinor };
         if (draft.occurredAt)
             payload.occurredAt = draft.occurredAt;
-        if (draft.categoryHint)
-            payload.categoryId = draft.categoryHint;
-        if (draft.merchant)
-            payload.merchant = draft.merchant;
-        if (draft.note)
-            payload.note = draft.note;
+        const categoryId = this.state.categoryId;
+        if (categoryId)
+            payload.categoryId = categoryId;
+        if (this.editedFields.has('merchant') || draft.merchant)
+            payload.merchant = (_a = draft.merchant) !== null && _a !== void 0 ? _a : '';
+        if (this.editedFields.has('note') || draft.note)
+            payload.note = (_b = draft.note) !== null && _b !== void 0 ? _b : '';
         return payload;
     }
 }
@@ -157,6 +192,7 @@ function createPhotoEntryPage(model) {
                 model.updateDraft({ [field]: field === 'amountMinor' ? Number(value) : value });
             this.setData(model.state);
         },
+        onCategoryChange(event) { var _a, _b; model.setCategoryByIndex(Number((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : -1)); this.setData(model.state); },
         async confirm() { await model.confirm(); this.setData(model.state); },
     };
 }

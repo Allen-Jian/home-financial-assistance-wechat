@@ -1,5 +1,5 @@
 import { ApiError } from '../../../src/api/client';
-import type { DocumentDraft, StageResult } from '../../../src/api/contracts';
+import type { CategorySummary, DocumentDraft, StageResult } from '../../../src/api/contracts';
 import { getRuntime } from '../../../app';
 
 export interface PhotoEntryFile {
@@ -18,6 +18,7 @@ export interface PhotoEntryApiPort {
   uploadAttachment?: (input: { filePath: string; draftId: string; originalName: string; contentType: string }) => Promise<unknown>;
   confirmDraft?: (draftId: string, input?: Record<string, unknown>) => Promise<unknown>;
   createTransaction?: (input: Record<string, unknown>) => Promise<unknown>;
+  fetchCategories?: () => Promise<CategorySummary[]>;
 }
 
 export interface PhotoEntryState {
@@ -29,6 +30,10 @@ export interface PhotoEntryState {
   loading: boolean;
   confirmed: boolean;
   error: string;
+  categories: CategorySummary[];
+  categoryId: string;
+  categoryName: string;
+  stagedExisting: boolean;
 }
 
 function contentTypeFor(file: PhotoEntryFile): string {
@@ -46,8 +51,9 @@ function hashFor(file: PhotoEntryFile): string {
 export class PhotoEntryPageModel {
   state: PhotoEntryState = {
     file: null, draft: null, draftId: '', originalPreserved: false,
-    uploaded: false, loading: false, confirmed: false, error: '',
+    uploaded: false, loading: false, confirmed: false, error: '', categories: [], categoryId: '', categoryName: '', stagedExisting: false,
   };
+  private readonly editedFields = new Set<keyof DocumentDraft>();
 
   constructor(private readonly api: PhotoEntryApiPort) {}
 
@@ -58,7 +64,11 @@ export class PhotoEntryPageModel {
     this.state.draftId = '';
     this.state.uploaded = false;
     this.state.confirmed = false;
+    this.state.categoryId = '';
+    this.state.categoryName = '';
+    this.state.stagedExisting = false;
     this.state.error = '';
+    this.editedFields.clear();
     this.state.loading = true;
     try {
       const contentType = contentTypeFor(file);
@@ -70,9 +80,23 @@ export class PhotoEntryPageModel {
             ? await this.api.parseDraft(file.path)
             : (() => { throw new Error('AI 分析暂不可用'); })();
       this.state.draft = draft;
+      if (this.api.fetchCategories) {
+        const categories = await this.api.fetchCategories();
+        this.state.categories = categories.filter((category) => category.active !== false);
+        const matched = this.state.categories.find((category) => category.direction === draft.direction && category.name === draft.categoryHint);
+        if (matched) {
+          this.state.categoryId = matched.id;
+          this.state.categoryName = matched.name;
+          this.state.draft = { ...draft, categoryId: matched.id };
+        }
+      }
       if (this.api.stageImport && this.api.confirmDraft) {
         const staged = await this.api.stageImport({ fileHash: hashFor(file), sourceType: 'manual-photo', draft });
-        this.state.draftId = staged.draftId ?? staged.draft?.id ?? staged.batchId ?? staged.batch?.id ?? '';
+        this.state.draftId = staged.draftId ?? staged.draft?.id ?? '';
+        if (staged.reused && !this.state.draftId) {
+          this.state.stagedExisting = true;
+          this.state.error = '该小票已存在，请稍后处理';
+        }
         if (!staged.reused && this.api.uploadAttachment && this.state.draftId) {
           await this.api.uploadAttachment({ filePath: file.path, draftId: this.state.draftId, originalName: file.name, contentType });
           this.state.uploaded = true;
@@ -88,7 +112,25 @@ export class PhotoEntryPageModel {
   }
 
   updateDraft(patch: Partial<DocumentDraft>): void {
-    if (this.state.draft) this.state.draft = { ...this.state.draft, ...patch };
+    if (this.state.draft) {
+      this.state.draft = { ...this.state.draft, ...patch };
+      Object.keys(patch).forEach((field) => this.editedFields.add(field as keyof DocumentDraft));
+      if (patch.categoryId !== undefined) this.state.categoryId = patch.categoryId;
+      if (patch.categoryHint !== undefined) {
+        const matched = this.state.categories.find((category) => category.direction === this.state.draft?.direction && category.name === patch.categoryHint);
+        this.state.categoryId = matched?.id ?? '';
+        this.state.categoryName = matched?.name ?? '';
+      }
+    }
+  }
+
+  setCategoryByIndex(index: number): void {
+    const category = this.state.categories[index];
+    if (category) {
+      this.state.categoryId = category.id;
+      this.state.categoryName = category.name;
+      this.updateDraft({ categoryId: category.id });
+    }
   }
 
   async retry(): Promise<boolean> {
@@ -99,6 +141,7 @@ export class PhotoEntryPageModel {
   async confirm(): Promise<boolean> {
     const draft = this.state.draft;
     if (!draft) { this.state.error = '请先分析小票'; return false; }
+    if (this.state.stagedExisting) { this.state.error = '该小票已存在，请稍后处理'; return false; }
     if (!Number.isSafeInteger(draft.amountMinor) || draft.amountMinor <= 0) { this.state.error = '草稿金额无效'; return false; }
     this.state.loading = true;
     this.state.error = '';
@@ -106,11 +149,7 @@ export class PhotoEntryPageModel {
       if (this.state.draftId && this.api.confirmDraft) {
         await this.api.confirmDraft(this.state.draftId, this.confirmationPayload(draft));
       } else if (this.api.createTransaction) {
-        const payload: Record<string, unknown> = { direction: draft.direction, amountMinor: draft.amountMinor };
-        if (draft.occurredAt) payload.occurredAt = draft.occurredAt;
-        if (draft.categoryHint) payload.categoryId = draft.categoryHint;
-        if (draft.merchant) payload.merchant = draft.merchant;
-        if (draft.note) payload.note = draft.note;
+        const payload = this.confirmationPayload(draft);
         await this.api.createTransaction(payload);
       } else {
         throw new Error('确认接口暂不可用');
@@ -129,9 +168,10 @@ export class PhotoEntryPageModel {
   private confirmationPayload(draft: DocumentDraft): Record<string, unknown> {
     const payload: Record<string, unknown> = { direction: draft.direction, amountMinor: draft.amountMinor };
     if (draft.occurredAt) payload.occurredAt = draft.occurredAt;
-    if (draft.categoryHint) payload.categoryId = draft.categoryHint;
-    if (draft.merchant) payload.merchant = draft.merchant;
-    if (draft.note) payload.note = draft.note;
+    const categoryId = this.state.categoryId;
+    if (categoryId) payload.categoryId = categoryId;
+    if (this.editedFields.has('merchant') || draft.merchant) payload.merchant = draft.merchant ?? '';
+    if (this.editedFields.has('note') || draft.note) payload.note = draft.note ?? '';
     return payload;
   }
 }
@@ -165,6 +205,7 @@ export function createPhotoEntryPage(model: PhotoEntryPageModel) {
       if (field && value !== undefined) model.updateDraft({ [field]: field === 'amountMinor' ? Number(value) : value });
       this.setData(model.state);
     },
+    onCategoryChange(this: PageContext, event: { detail?: { value?: number } }) { model.setCategoryByIndex(Number(event.detail?.value ?? -1)); this.setData(model.state); },
     async confirm(this: PageContext) { await model.confirm(); this.setData(model.state); },
   };
 }

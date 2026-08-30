@@ -100,6 +100,7 @@ export interface DocumentDraft {
   merchant?: string;
   note?: string;
   categoryHint?: string;
+  categoryId?: string;
   accountHint?: string;
   fieldConfidence?: Record<string, number>;
   confidence?: number;

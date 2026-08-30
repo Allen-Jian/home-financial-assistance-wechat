@@ -24,3 +24,10 @@ Status: complete
 
 - Only the WeChat mini-program repository was changed; the API repository was not modified.
 - Real WeChat DevTools/device, camera permissions, and live AI/API acceptance were not run locally.
+
+## Review follow-up
+
+- Reused import batches without a real draft ID are shown as already existing and cannot be confirmed through a batch ID.
+- Active categories are loaded and AI category names are mapped to matching IDs by direction; unmatched names are omitted.
+- Edited merchant and note values, including empty strings, are retained in confirmation overrides.
+- Follow-up verification: `npm test -- --runInBand` — PASS, 23 suites / 67 tests; typecheck, build:wechat, and diff-check also pass.
