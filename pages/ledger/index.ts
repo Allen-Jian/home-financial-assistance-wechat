@@ -86,7 +86,7 @@ export class LedgerListPageModel {
     transactions: [], selectedTransaction: null, selectedAmountDisplay: '', selectedDateDisplay: '', selectedDirectionLabel: '', loading: false, error: '',
   };
 
-  constructor(private readonly api: LedgerListApiPort, private readonly now: () => Date = currentAucklandDate, private readonly cache?: ReadCache) {
+  constructor(private readonly api: LedgerListApiPort, private readonly now: () => Date = currentAucklandDate, private readonly cache?: ReadCache, private readonly householdId: () => string = () => 'anonymous') {
     const period = this.currentPeriod();
     this.state.period = period;
   }
@@ -118,7 +118,7 @@ export class LedgerListPageModel {
     this.state.selectedTransaction = null;
     try {
       const transactions = await this.api.fetchTransactions(period);
-      this.cache?.set(`ledger:${period.from}:${period.to}`, transactions);
+      this.cache?.set(this.cacheKey(period), transactions);
       this.state.transactions = transactions.map((transaction) => ({
         ...transaction,
         amountDisplay: formatNzdMinor(transaction.amountMinor),
@@ -128,7 +128,7 @@ export class LedgerListPageModel {
       return true;
     } catch (error) {
       const cached = error instanceof ApiError && (error.code === 'network' || error.code === 'timeout')
-        ? this.cache?.read<TransactionSummary[]>(`ledger:${period.from}:${period.to}`, 5 * 60_000)
+        ? this.cache?.read<TransactionSummary[]>(this.cacheKey(period), 5 * 60_000)
         : null;
       if (cached) this.state.transactions = cached.data.map((transaction) => ({ ...transaction, amountDisplay: formatNzdMinor(transaction.amountMinor), dateDisplay: toDisplayDate(transaction.occurredAt), directionLabel: directionLabels[transaction.direction] }));
       else this.state.error = error instanceof Error ? error.message : '加载账目失败';
@@ -150,6 +150,8 @@ export class LedgerListPageModel {
 
   setCustomFrom(value: string): void { this.state.customFrom = value; }
   setCustomTo(value: string): void { this.state.customTo = value; }
+
+  private cacheKey(period: LedgerPeriodQuery): string { return `ledger:${this.householdId()}:${period.from}:${period.to}`; }
 
   shiftMonth(delta: number): LedgerPeriodQuery {
     const current = this.state.periodMode === 'month' ? this.state.period.from : this.currentPeriod().from;
@@ -361,5 +363,5 @@ declare function getApp<T>(): T;
 declare const wx: { navigateTo(options: { url: string }): void };
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  Page(createLedgerListPage(new LedgerListPageModel(runtime.api as unknown as LedgerListApiPort, undefined, runtime.cache)));
+  Page(createLedgerListPage(new LedgerListPageModel(runtime.api as unknown as LedgerListApiPort, undefined, runtime.cache, () => runtime.sessions.read()?.householdId ?? 'anonymous')));
 }

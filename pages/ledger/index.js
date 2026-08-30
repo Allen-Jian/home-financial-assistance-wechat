@@ -56,10 +56,11 @@ function toDisplayDate(value) {
     return new Intl.DateTimeFormat('zh-CN', { timeZone: 'Pacific/Auckland', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
 class LedgerListPageModel {
-    constructor(api, now = currentAucklandDate, cache) {
+    constructor(api, now = currentAucklandDate, cache, householdId = () => 'anonymous') {
         this.api = api;
         this.now = now;
         this.cache = cache;
+        this.householdId = householdId;
         this.state = {
             periodMode: 'month', period: { from: '', to: '' }, customFrom: '', customTo: '',
             transactions: [], selectedTransaction: null, selectedAmountDisplay: '', selectedDateDisplay: '', selectedDirectionLabel: '', loading: false, error: '',
@@ -94,7 +95,7 @@ class LedgerListPageModel {
         this.state.selectedTransaction = null;
         try {
             const transactions = await this.api.fetchTransactions(period);
-            (_a = this.cache) === null || _a === void 0 ? void 0 : _a.set(`ledger:${period.from}:${period.to}`, transactions);
+            (_a = this.cache) === null || _a === void 0 ? void 0 : _a.set(this.cacheKey(period), transactions);
             this.state.transactions = transactions.map((transaction) => ({
                 ...transaction,
                 amountDisplay: (0, money_1.formatNzdMinor)(transaction.amountMinor),
@@ -105,7 +106,7 @@ class LedgerListPageModel {
         }
         catch (error) {
             const cached = error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout')
-                ? (_b = this.cache) === null || _b === void 0 ? void 0 : _b.read(`ledger:${period.from}:${period.to}`, 5 * 60000)
+                ? (_b = this.cache) === null || _b === void 0 ? void 0 : _b.read(this.cacheKey(period), 5 * 60000)
                 : null;
             if (cached)
                 this.state.transactions = cached.data.map((transaction) => ({ ...transaction, amountDisplay: (0, money_1.formatNzdMinor)(transaction.amountMinor), dateDisplay: toDisplayDate(transaction.occurredAt), directionLabel: directionLabels[transaction.direction] }));
@@ -131,6 +132,7 @@ class LedgerListPageModel {
     }
     setCustomFrom(value) { this.state.customFrom = value; }
     setCustomTo(value) { this.state.customTo = value; }
+    cacheKey(period) { return `ledger:${this.householdId()}:${period.from}:${period.to}`; }
     shiftMonth(delta) {
         const current = this.state.periodMode === 'month' ? this.state.period.from : this.currentPeriod().from;
         const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Auckland', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(current));
@@ -343,5 +345,5 @@ function createLedgerListPage(model) {
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
     const runtime = (0, app_1.getRuntime)();
-    Page(createLedgerListPage(new LedgerListPageModel(runtime.api, undefined, runtime.cache)));
+    Page(createLedgerListPage(new LedgerListPageModel(runtime.api, undefined, runtime.cache, () => { var _a, _b; return (_b = (_a = runtime.sessions.read()) === null || _a === void 0 ? void 0 : _a.householdId) !== null && _b !== void 0 ? _b : 'anonymous'; })));
 }

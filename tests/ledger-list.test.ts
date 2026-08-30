@@ -1,5 +1,7 @@
 import { LedgerListPageModel } from '../pages/ledger/index';
 import { getPeriodBounds } from '../src/domain/period';
+import { ReadCache } from '../src/cache/read-cache';
+import { ApiError } from '../src/api/client';
 
 test('ledger defaults to Auckland month and accepts a custom range', async () => {
   const api = { fetchTransactions: jest.fn().mockResolvedValue([]) };
@@ -43,4 +45,16 @@ test('custom Auckland boundaries handle daylight-saving transitions', () => {
   expect(model.currentPeriod().from).toBe('2026-09-26T12:00:00.000Z');
   model.setPeriod('custom', '2026-04-05', '2026-04-05');
   expect(model.currentPeriod().from).toBe('2026-04-04T11:00:00.000Z');
+});
+
+test('ledger cache is isolated by household', async () => {
+  const values = new Map<string, string>();
+  const storage = { getStorageSync: (key: string) => values.get(key), setStorageSync: (key: string, value: string) => values.set(key, value), removeStorageSync: (key: string) => values.delete(key) };
+  const cache = new ReadCache(storage, () => 1_000);
+  const period = { from: '2026-08-01T00:00:00Z', to: '2026-09-01T00:00:00Z' };
+  const first = new LedgerListPageModel({ fetchTransactions: jest.fn().mockResolvedValue([{ id: 'a', accountId: 'p', direction: 'expense', amountMinor: 100, occurredAt: period.from, version: 0 }]) }, () => new Date(), cache, () => 'house-a');
+  await first.load(period);
+  const second = new LedgerListPageModel({ fetchTransactions: jest.fn().mockRejectedValue(new ApiError(0, 'network', 'offline')) }, () => new Date(), cache, () => 'house-b');
+  await second.load(period);
+  expect(second.state.transactions).toEqual([]);
 });
