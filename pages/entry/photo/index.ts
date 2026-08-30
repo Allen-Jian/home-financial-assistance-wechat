@@ -188,7 +188,7 @@ export function createPhotoEntryPage(model: PhotoEntryPageModel) {
     data: model.state,
     choosePhoto(this: PageContext) {
       wx.chooseMedia({
-        count: 1, mediaType: ['image'], sourceType: ['camera', 'album'],
+        count: 1, mediaType: ['image'], sourceType: ['camera'],
         success: async (result) => {
           const file = result.tempFiles[0];
           if (file) await model.analyze({ path: file.tempFilePath ?? file.path ?? '', name: file.name ?? 'receipt.jpg', size: file.size, contentType: file.fileType === 'png' ? 'image/png' : 'image/jpeg' });

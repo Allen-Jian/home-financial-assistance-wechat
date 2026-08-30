@@ -171,7 +171,7 @@ function createPhotoEntryPage(model) {
         data: model.state,
         choosePhoto() {
             wx.chooseMedia({
-                count: 1, mediaType: ['image'], sourceType: ['camera', 'album'],
+                count: 1, mediaType: ['image'], sourceType: ['camera'],
                 success: async (result) => {
                     var _a, _b, _c;
                     const file = result.tempFiles[0];

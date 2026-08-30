@@ -1,4 +1,15 @@
-import { PhotoEntryPageModel } from '../pages/entry/photo/index';
+import { createPhotoEntryPage, PhotoEntryPageModel } from '../pages/entry/photo/index';
+
+test('quick photo entry requests camera-only media', () => {
+  const chooseMedia = jest.fn(({ success }: { sourceType: string[]; success: (result: { tempFiles: never[] }) => void }) => success({ tempFiles: [] }));
+  (globalThis as { wx?: unknown }).wx = { chooseMedia };
+  const page = createPhotoEntryPage(new PhotoEntryPageModel({ parseDraft: jest.fn() }));
+
+  page.choosePhoto.call({ setData: jest.fn() });
+
+  expect(chooseMedia).toHaveBeenCalledWith(expect.objectContaining({ sourceType: ['camera'] }));
+  expect(chooseMedia.mock.calls[0][0].sourceType).not.toContain('album');
+});
 
 test('AI failure keeps the original selected file', async () => {
   const model = new PhotoEntryPageModel({ parseDraft: jest.fn().mockRejectedValue(new Error('AI unavailable')) });
