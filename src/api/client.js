@@ -69,6 +69,9 @@ class ApiClient {
     post(path, body = {}) {
         return this.requestJson('POST', path, body, false);
     }
+    patch(path, body = {}) {
+        return this.requestJson('PATCH', path, body, false);
+    }
     upload(path, file) {
         const session = this.options.sessions.read();
         const header = session ? { Authorization: `Bearer ${session.accessToken}` } : {};
@@ -118,6 +121,19 @@ class ApiClient {
     fetchReports(period) { return this.get('/reports/summary', period); }
     fetchAccounts() { return this.get('/accounts'); }
     fetchCategories() { return this.get('/categories'); }
+    createCategory(input) { return this.post('/categories', input); }
+    updateCategory(id, input) { return this.patch(`/categories/${encodeURIComponent(id)}`, input); }
+    setInitialAsset(amountMinor, expectedVersion) {
+        return this.patch('/accounts/primary/opening-balance', { amountMinor, expectedVersion });
+    }
+    updateOpeningBalance(amountMinor, expectedVersion) {
+        return this.setInitialAsset(amountMinor, expectedVersion);
+    }
+    fetchTermDeposits() { return this.get('/term-deposits'); }
+    createTermDeposit(input) { return this.post('/term-deposits', input); }
+    closeTermDeposit(id, expectedVersion) {
+        return this.post(`/term-deposits/${encodeURIComponent(id)}/close`, { expectedVersion });
+    }
     fetchPendingDrafts() { return this.get('/drafts'); }
     fetchRecurring() { return this.get('/recurring'); }
     createRecurring(input) { return this.post('/recurring', input); }

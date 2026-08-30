@@ -12,7 +12,10 @@
     "pages/ai/index",
     "pages/recurring/index",
     "pages/household/index",
-    "pages/more/index"
+    "pages/more/index",
+    "pages/settings/categories/index",
+    "pages/settings/assets/index",
+    "pages/settings/term-deposits/index"
   ],
   "window": {
     "navigationBarTitleText": "家庭手账",

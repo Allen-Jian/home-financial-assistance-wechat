@@ -40,6 +40,8 @@ export interface AccountSummary {
   name: string;
   kind: AccountKind;
   openingBalanceMinor: number;
+  systemKey?: string | null;
+  version?: number;
 }
 
 export interface CategorySummary {
@@ -47,6 +49,20 @@ export interface CategorySummary {
   name: string;
   direction: 'income' | 'expense';
   active?: boolean;
+}
+
+export type TermDepositStatus = 'active' | 'matured' | 'closed';
+
+export interface TermDepositSummary {
+  id: string;
+  name: string;
+  principalMinor: number;
+  annualRateBasisPoints: number;
+  startedAt: string;
+  maturesAt: string;
+  status: TermDepositStatus;
+  note?: string | null;
+  version: number;
 }
 
 export interface TransactionSummary {

@@ -8,6 +8,7 @@ import type {
   ImportedRow,
   ReportSummary,
   RecurringSummary,
+  TermDepositSummary,
   StageResult,
   TokenPair,
   TransactionSummary,
@@ -18,7 +19,7 @@ import { SessionStore } from '../auth/session-store';
 import { ReadCache, type CachedRead } from '../cache/read-cache';
 import { isRecord } from '../shared/guards';
 
-export type RequestMethod = 'GET' | 'POST' | 'DELETE';
+export type RequestMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 export interface WxResponse {
   statusCode: number;
   data: unknown;
@@ -137,6 +138,10 @@ export class ApiClient {
     return this.requestJson<T>('POST', path, body, false);
   }
 
+  patch<T>(path: string, body: unknown = {}): Promise<T> {
+    return this.requestJson<T>('PATCH', path, body, false);
+  }
+
   upload<T>(path: string, file: FileUpload): Promise<T> {
     const session = this.options.sessions.read();
     const header: Record<string, string> = session ? { Authorization: `Bearer ${session.accessToken}` } : {};
@@ -182,6 +187,19 @@ export class ApiClient {
   fetchReports(period: Query): Promise<ReportSummary> { return this.get('/reports/summary', period); }
   fetchAccounts<T = unknown>(): Promise<T> { return this.get('/accounts'); }
   fetchCategories<T = unknown>(): Promise<T> { return this.get('/categories'); }
+  createCategory<T = unknown>(input: JsonObject): Promise<T> { return this.post('/categories', input); }
+  updateCategory<T = unknown>(id: string, input: JsonObject): Promise<T> { return this.patch(`/categories/${encodeURIComponent(id)}`, input); }
+  setInitialAsset<T = unknown>(amountMinor: number, expectedVersion: number): Promise<T> {
+    return this.patch('/accounts/primary/opening-balance', { amountMinor, expectedVersion });
+  }
+  updateOpeningBalance<T = unknown>(amountMinor: number, expectedVersion: number): Promise<T> {
+    return this.setInitialAsset(amountMinor, expectedVersion);
+  }
+  fetchTermDeposits(): Promise<TermDepositSummary[]> { return this.get('/term-deposits'); }
+  createTermDeposit(input: JsonObject): Promise<TermDepositSummary> { return this.post('/term-deposits', input); }
+  closeTermDeposit(id: string, expectedVersion: number): Promise<TermDepositSummary> {
+    return this.post(`/term-deposits/${encodeURIComponent(id)}/close`, { expectedVersion });
+  }
   fetchPendingDrafts<T = unknown>(): Promise<T> { return this.get('/drafts'); }
   fetchRecurring(): Promise<RecurringSummary[]> { return this.get('/recurring'); }
   createRecurring(input: JsonObject): Promise<RecurringSummary> { return this.post('/recurring', input); }
@@ -221,7 +239,7 @@ export class ApiClient {
     try { await this.post('/auth/logout', { refreshToken: session.refreshToken }); } finally { this.options.sessions.clear(); }
   }
 
-  private async requestJson<T>(method: RequestMethod | 'DELETE', path: string, data: unknown, canRefresh: boolean): Promise<T> {
+  private async requestJson<T>(method: RequestMethod, path: string, data: unknown, canRefresh: boolean): Promise<T> {
     try {
       const response = await this.rawRequest(method, path, data);
       if (response.statusCode >= 200 && response.statusCode < 300) return this.parseBody<T>(response.data);
@@ -235,7 +253,7 @@ export class ApiClient {
     }
   }
 
-  private rawRequest(method: RequestMethod | 'DELETE', path: string, data: unknown): Promise<WxResponse> {
+  private rawRequest(method: RequestMethod, path: string, data: unknown): Promise<WxResponse> {
     const session = this.options.sessions.read();
     const header: Record<string, string> = session ? { Authorization: `Bearer ${session.accessToken}` } : {};
     return new Promise<WxResponse>((resolve, reject) => {
