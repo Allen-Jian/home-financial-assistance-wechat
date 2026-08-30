@@ -2,6 +2,7 @@
   "pages": [
     "pages/login/index",
     "pages/dashboard/index",
+    "pages/entry/index",
     "pages/ledger/index",
     "pages/imports/index",
     "pages/drafts/index",
@@ -34,12 +35,12 @@
         "text": "账目"
       },
       {
-        "pagePath": "pages/reports/index",
-        "text": "报表"
+        "pagePath": "pages/ai/index",
+        "text": "AI聊天"
       },
       {
         "pagePath": "pages/more/index",
-        "text": "更多"
+        "text": "设置"
       }
     ]
   },

@@ -22,6 +22,23 @@ test('dashboard runtime page loads the current period on show and syncs data', a
   expect(context.setData).toHaveBeenCalledWith(model.state);
 });
 
+test('quick entry opens chooser and ledger links switch tab', () => {
+  const navigateTo = jest.fn();
+  const switchTab = jest.fn();
+  (globalThis as { wx?: unknown }).wx = { navigateTo, switchTab };
+  const page = createDashboardPage(new DashboardPageModel({
+    fetchSummary: jest.fn().mockResolvedValue({ netWorthMinor: 0, incomeMinor: 0, expenseMinor: 0, categoryBreakdown: [], accountBreakdown: [] }),
+    fetchAccounts: jest.fn().mockResolvedValue([]),
+    fetchCategories: jest.fn().mockResolvedValue([]),
+  }));
+
+  page.onQuickEntry();
+  page.onOpenLedger();
+
+  expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/entry/index' });
+  expect(switchTab).toHaveBeenCalledWith({ url: '/pages/ledger/index' });
+});
+
 test('ledger runtime page forwards input and save events to the model', async () => {
   const api = { createTransaction: jest.fn().mockResolvedValue({ id: 'tx-1' }) };
   const model = new LedgerPageModel(api, () => 'idem-1');

@@ -91,7 +91,8 @@ function createDashboardPage(model, period = () => {
             await model.load(period());
             this.setData(model.state);
         },
-        onQuickEntry() { wx.navigateTo({ url: '/pages/ledger/index' }); },
+        onQuickEntry() { wx.navigateTo({ url: '/pages/entry/index' }); },
+        onOpenLedger() { wx.switchTab({ url: '/pages/ledger/index' }); },
     };
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {

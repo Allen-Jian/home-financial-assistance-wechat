@@ -5,7 +5,10 @@ import { getRuntime } from '../../app';
 import { getPeriodBounds } from '../../src/domain/period';
 import { formatNzdMinor } from '../../src/domain/money';
 
-declare const wx: { navigateTo(options: { url: string }): void };
+declare const wx: {
+  navigateTo(options: { url: string }): void;
+  switchTab(options: { url: string }): void;
+};
 
 export interface PeriodQuery { from: string; to: string }
 export interface DashboardApiPort {
@@ -115,7 +118,8 @@ export function createDashboardPage(
       await model.load(period());
       this.setData(model.state);
     },
-    onQuickEntry() { wx.navigateTo({ url: '/pages/ledger/index' }); },
+    onQuickEntry() { wx.navigateTo({ url: '/pages/entry/index' }); },
+    onOpenLedger() { wx.switchTab({ url: '/pages/ledger/index' }); },
   };
 }
 
