@@ -97,3 +97,16 @@ test('renders cached summary with a cache label after the API is unavailable', a
   await model.load({ from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' });
   expect(model.state).toEqual(expect.objectContaining({ summary, fromCache: true, cacheLabel: '缓存数据' }));
 });
+
+test('dashboard cache is isolated by household', async () => {
+  const storage = new MemoryStorage();
+  const cache = new ReadCache(storage);
+  const period = { from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' };
+  const firstApi = { fetchSummary: jest.fn().mockResolvedValue(summary), fetchAccounts: jest.fn().mockResolvedValue(accounts), fetchCategories: jest.fn().mockResolvedValue(categories) };
+  await new DashboardPageModel(firstApi, cache, () => 'household-a').load(period);
+  const secondApi = { fetchSummary: jest.fn().mockRejectedValue(new ApiError(0, 'network', 'offline')), fetchAccounts: jest.fn().mockRejectedValue(new ApiError(0, 'network', 'offline')), fetchCategories: jest.fn().mockRejectedValue(new ApiError(0, 'network', 'offline')) };
+  const second = new DashboardPageModel(secondApi, cache, () => 'household-b');
+  await second.load(period);
+  expect(second.state.fromCache).toBe(false);
+  expect(second.state.summary).toBeNull();
+});

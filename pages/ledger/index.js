@@ -90,12 +90,16 @@ class LedgerListPageModel {
     async load(period) {
         var _a, _b;
         this.state.period = period;
+        const scope = this.householdId();
+        const cacheKey = this.cacheKey(period, scope);
         this.state.loading = true;
         this.state.error = '';
         this.state.selectedTransaction = null;
         try {
             const transactions = await this.api.fetchTransactions(period);
-            (_a = this.cache) === null || _a === void 0 ? void 0 : _a.set(this.cacheKey(period), transactions);
+            if (scope !== this.householdId())
+                return false;
+            (_a = this.cache) === null || _a === void 0 ? void 0 : _a.set(cacheKey, transactions);
             this.state.transactions = transactions.map((transaction) => ({
                 ...transaction,
                 amountDisplay: (0, money_1.formatNzdMinor)(transaction.amountMinor),
@@ -105,8 +109,8 @@ class LedgerListPageModel {
             return true;
         }
         catch (error) {
-            const cached = error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout')
-                ? (_b = this.cache) === null || _b === void 0 ? void 0 : _b.read(this.cacheKey(period), 5 * 60000)
+            const cached = scope === this.householdId() && error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout')
+                ? (_b = this.cache) === null || _b === void 0 ? void 0 : _b.read(cacheKey, 5 * 60000)
                 : null;
             if (cached)
                 this.state.transactions = cached.data.map((transaction) => ({ ...transaction, amountDisplay: (0, money_1.formatNzdMinor)(transaction.amountMinor), dateDisplay: toDisplayDate(transaction.occurredAt), directionLabel: directionLabels[transaction.direction] }));
@@ -132,7 +136,7 @@ class LedgerListPageModel {
     }
     setCustomFrom(value) { this.state.customFrom = value; }
     setCustomTo(value) { this.state.customTo = value; }
-    cacheKey(period) { return `ledger:${this.householdId()}:${period.from}:${period.to}`; }
+    cacheKey(period, scope = this.householdId()) { return `ledger:${scope}:${period.from}:${period.to}`; }
     shiftMonth(delta) {
         const current = this.state.periodMode === 'month' ? this.state.period.from : this.currentPeriod().from;
         const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Auckland', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(current));

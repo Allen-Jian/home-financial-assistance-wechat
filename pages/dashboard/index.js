@@ -8,9 +8,10 @@ const period_1 = require("../../src/domain/period");
 const money_1 = require("../../src/domain/money");
 const CACHE_TTL = 5 * 60000;
 class DashboardPageModel {
-    constructor(api, cache) {
+    constructor(api, cache, householdId = () => 'anonymous') {
         this.api = api;
         this.cache = cache;
+        this.householdId = householdId;
         this.state = {
             loading: false, error: '', summary: null, accounts: [], categories: [],
             pendingDraftCount: 0, duplicateCount: 0, recurringDueCount: 0, recentTransactions: [],
@@ -19,21 +20,24 @@ class DashboardPageModel {
     }
     async load(period) {
         var _a, _b;
-        const cacheKey = `dashboard:${period.from}:${period.to}`;
+        const scope = this.householdId();
+        const cacheKey = `dashboard:${scope}:${period.from}:${period.to}`;
         this.state.loading = true;
         this.state.error = '';
         try {
             const [summary, accounts, categories] = await Promise.all([
                 this.api.fetchSummary(period), this.api.fetchAccounts(), this.api.fetchCategories(),
             ]);
+            if (scope !== this.householdId())
+                return;
             this.applySummary(summary, false);
             this.state.accounts = accounts;
             this.state.categories = categories;
             (_a = this.cache) === null || _a === void 0 ? void 0 : _a.set(cacheKey, summary);
-            await this.loadInsights();
+            await this.loadInsights(scope);
         }
         catch (error) {
-            const cached = error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout')
+            const cached = scope === this.householdId() && error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout')
                 ? (_b = this.cache) === null || _b === void 0 ? void 0 : _b.read(cacheKey, CACHE_TTL)
                 : null;
             if (cached) {
@@ -47,19 +51,21 @@ class DashboardPageModel {
             this.state.loading = false;
         }
     }
-    async loadInsights() {
+    async loadInsights(scope = this.householdId()) {
         var _a, _b;
         if (!this.api.fetchAiInsights)
             return;
-        const cacheKey = 'dashboard:ai-insights';
+        const cacheKey = `dashboard:${scope}:ai-insights`;
         try {
             const insights = await this.api.fetchAiInsights();
+            if (scope !== this.householdId())
+                return;
             this.state.insights = insights;
             this.state.insightsFromCache = false;
             (_a = this.cache) === null || _a === void 0 ? void 0 : _a.set(cacheKey, insights);
         }
         catch (error) {
-            const cached = error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout') ? (_b = this.cache) === null || _b === void 0 ? void 0 : _b.read(cacheKey, CACHE_TTL) : null;
+            const cached = scope === this.householdId() && error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout') ? (_b = this.cache) === null || _b === void 0 ? void 0 : _b.read(cacheKey, CACHE_TTL) : null;
             if (cached) {
                 this.state.insights = cached.data;
                 this.state.insightsFromCache = true;
@@ -100,5 +106,5 @@ function createDashboardPage(model, period = () => {
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
     const runtime = (0, app_1.getRuntime)();
-    Page(createDashboardPage(new DashboardPageModel(runtime.api, runtime.cache)));
+    Page(createDashboardPage(new DashboardPageModel(runtime.api, runtime.cache, () => { var _a, _b; return (_b = (_a = runtime.sessions.read()) === null || _a === void 0 ? void 0 : _a.householdId) !== null && _b !== void 0 ? _b : 'anonymous'; })));
 }

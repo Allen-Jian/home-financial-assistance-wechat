@@ -113,12 +113,15 @@ export class LedgerListPageModel {
 
   async load(period: LedgerPeriodQuery): Promise<boolean> {
     this.state.period = period;
+    const scope = this.householdId();
+    const cacheKey = this.cacheKey(period, scope);
     this.state.loading = true;
     this.state.error = '';
     this.state.selectedTransaction = null;
     try {
       const transactions = await this.api.fetchTransactions(period);
-      this.cache?.set(this.cacheKey(period), transactions);
+      if (scope !== this.householdId()) return false;
+      this.cache?.set(cacheKey, transactions);
       this.state.transactions = transactions.map((transaction) => ({
         ...transaction,
         amountDisplay: formatNzdMinor(transaction.amountMinor),
@@ -127,8 +130,8 @@ export class LedgerListPageModel {
       }));
       return true;
     } catch (error) {
-      const cached = error instanceof ApiError && (error.code === 'network' || error.code === 'timeout')
-        ? this.cache?.read<TransactionSummary[]>(this.cacheKey(period), 5 * 60_000)
+      const cached = scope === this.householdId() && error instanceof ApiError && (error.code === 'network' || error.code === 'timeout')
+        ? this.cache?.read<TransactionSummary[]>(cacheKey, 5 * 60_000)
         : null;
       if (cached) this.state.transactions = cached.data.map((transaction) => ({ ...transaction, amountDisplay: formatNzdMinor(transaction.amountMinor), dateDisplay: toDisplayDate(transaction.occurredAt), directionLabel: directionLabels[transaction.direction] }));
       else this.state.error = error instanceof Error ? error.message : '加载账目失败';
@@ -151,7 +154,7 @@ export class LedgerListPageModel {
   setCustomFrom(value: string): void { this.state.customFrom = value; }
   setCustomTo(value: string): void { this.state.customTo = value; }
 
-  private cacheKey(period: LedgerPeriodQuery): string { return `ledger:${this.householdId()}:${period.from}:${period.to}`; }
+  private cacheKey(period: LedgerPeriodQuery, scope = this.householdId()): string { return `ledger:${scope}:${period.from}:${period.to}`; }
 
   shiftMonth(delta: number): LedgerPeriodQuery {
     const current = this.state.periodMode === 'month' ? this.state.period.from : this.currentPeriod().from;
