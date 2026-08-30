@@ -46,6 +46,7 @@ export interface CategorySummary {
   id: string;
   name: string;
   direction: 'income' | 'expense';
+  active?: boolean;
 }
 
 export interface TransactionSummary {

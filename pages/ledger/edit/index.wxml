@@ -1,0 +1,11 @@
+<view class="page manual-page">
+  <view class="page-title"><text>手动记账</text><text class="sub">收入或支出会记录到家庭账本</text></view>
+  <view class="direction-switch"><button bindtap="onDirectionChange" class="{{direction === 'expense' ? 'active' : ''}}" data-value="expense">支出</button><button bindtap="onDirectionChange" class="{{direction === 'income' ? 'active' : ''}}" data-value="income">收入</button></view>
+  <view class="amount-box"><text class="currency">NZ$</text><input bindinput="onAmountInput" class="amount-input" type="digit" placeholder="0.00" value="{{amount}}" /></view>
+  <view class="field-row"><text>分类</text><picker bindchange="onCategoryChange" mode="selector" range="{{categories}}" range-key="name"><text class="picker-value">{{categoryName || '选择分类'}}</text></picker></view>
+  <view class="field-row"><text>日期</text><picker bindchange="onDateChange" mode="date" value="{{occurredAt}}"><text class="picker-value">{{occurredAt}}</text></picker></view>
+  <textarea bindinput="onNoteInput" class="note" placeholder="备注（可选）" value="{{note}}"></textarea>
+  <text wx:if="{{error}}" class="error">{{error}}</text>
+  <view wx:if="{{duplicateActions.length}}" class="duplicate-actions"><button bindtap="later">稍后处理</button><button class="primary-button" bindtap="keepBoth">保留两笔</button></view>
+  <button bindtap="save" class="primary-button save-button" loading="{{loading}}">保存账目</button>
+</view>

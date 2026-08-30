@@ -1,0 +1,8 @@
+<view class="page photo-page">
+  <view class="page-title"><text>拍照记账</text><text class="sub">AI 只生成草稿，确认后才会入账</text></view>
+  <button wx:if="{{!file}}" class="primary-button picker-button" bindtap="choosePhoto">拍照或从相册选图</button>
+  <view wx:if="{{file}}" class="photo-card"><text class="file-name">{{file.name}}</text><view wx:if="{{draft}}" class="draft-overview"><view class="draft-line"><text>金额</text><input data-field="amountMinor" bindinput="onDraftInput" type="digit" value="{{draft.amountMinor}}" /></view><view class="draft-line"><text>方向</text><text>{{draft.direction}}</text></view><view class="draft-line"><text>日期</text><input data-field="occurredAt" bindinput="onDraftInput" value="{{draft.occurredAt}}" /></view><view class="draft-line"><text>商户</text><input data-field="merchant" bindinput="onDraftInput" value="{{draft.merchant}}" /></view><view class="draft-line"><text>备注</text><input data-field="note" bindinput="onDraftInput" value="{{draft.note}}" /></view></view></view>
+  <text wx:if="{{error}}" class="error">{{error}}</text>
+  <button wx:if="{{draft && !confirmed}}" class="primary-button confirm-button" loading="{{loading}}" bindtap="confirm">确认入账</button>
+  <text wx:if="{{confirmed}}" class="success">已确认入账</text>
+</view>

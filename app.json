@@ -3,6 +3,8 @@
     "pages/login/index",
     "pages/dashboard/index",
     "pages/entry/index",
+    "pages/entry/photo/index",
+    "pages/ledger/edit/index",
     "pages/ledger/index",
     "pages/imports/index",
     "pages/drafts/index",

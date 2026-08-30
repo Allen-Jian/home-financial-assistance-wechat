@@ -129,6 +129,9 @@ class ApiClient {
     previewDocument(input) {
         return this.upload('/imports/pdf/preview', { filePath: input.filePath, name: 'file' });
     }
+    analyzePhoto(input) {
+        return this.previewDocument(input);
+    }
     previewAnzCsv(csv) { return this.post('/imports/anz-csv/preview', { csv }); }
     stageAnzCsv(input) { return this.post('/imports/anz-csv/stage', input); }
     parseDraft(input) { return this.post('/ai/parse-draft', { input }); }
