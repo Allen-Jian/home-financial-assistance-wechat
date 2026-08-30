@@ -89,7 +89,7 @@ Expected: FAIL because the bootstrap method, schema fields, and endpoint do not 
 
 - [ ] **Step 3: Implement the minimum**
 
-Add the migration and `ensureLedgerDefaults`. Seed the confirmed 10 expense and 5 income categories with `createMany({ skipDuplicates: true })`. Call it in the new-household WeChat login transaction and expose authenticated `POST /accounts/bootstrap` for existing empty households. Add authenticated `PATCH /accounts/primary/opening-balance` with `{ amountMinor, expectedVersion }`; update PRIMARY conditionally, increment its version, and write `asset.initial-balance.updated`.
+Add the migration and `ensureLedgerDefaults`. Seed the confirmed 10 expense and 5 income categories with `createMany({ skipDuplicates: true })`. After the new-household WeChat creation transaction returns, call the idempotent bootstrap before issuing tokens; expose authenticated `POST /accounts/bootstrap` for existing empty households. Add authenticated `PATCH /accounts/primary/opening-balance` with `{ amountMinor, expectedVersion }`; update PRIMARY conditionally, increment its version, and write `asset.initial-balance.updated`.
 
 - [ ] **Step 4: Run GREEN**
 
