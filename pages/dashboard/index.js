@@ -28,8 +28,10 @@ class DashboardPageModel {
             const [summary, accounts, categories] = await Promise.all([
                 this.api.fetchSummary(period), this.api.fetchAccounts(), this.api.fetchCategories(),
             ]);
-            if (scope !== this.householdId())
+            if (scope !== this.householdId()) {
+                this.clearPrivateState();
                 return;
+            }
             this.applySummary(summary, false);
             this.state.accounts = accounts;
             this.state.categories = categories;
@@ -37,7 +39,11 @@ class DashboardPageModel {
             await this.loadInsights(scope);
         }
         catch (error) {
-            const cached = scope === this.householdId() && error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout')
+            if (scope !== this.householdId()) {
+                this.clearPrivateState();
+                return;
+            }
+            const cached = error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout')
                 ? (_b = this.cache) === null || _b === void 0 ? void 0 : _b.read(cacheKey, CACHE_TTL)
                 : null;
             if (cached) {
@@ -58,14 +64,20 @@ class DashboardPageModel {
         const cacheKey = `dashboard:${scope}:ai-insights`;
         try {
             const insights = await this.api.fetchAiInsights();
-            if (scope !== this.householdId())
+            if (scope !== this.householdId()) {
+                this.clearPrivateState();
                 return;
+            }
             this.state.insights = insights;
             this.state.insightsFromCache = false;
             (_a = this.cache) === null || _a === void 0 ? void 0 : _a.set(cacheKey, insights);
         }
         catch (error) {
-            const cached = scope === this.householdId() && error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout') ? (_b = this.cache) === null || _b === void 0 ? void 0 : _b.read(cacheKey, CACHE_TTL) : null;
+            if (scope !== this.householdId()) {
+                this.clearPrivateState();
+                return;
+            }
+            const cached = error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout') ? (_b = this.cache) === null || _b === void 0 ? void 0 : _b.read(cacheKey, CACHE_TTL) : null;
             if (cached) {
                 this.state.insights = cached.data;
                 this.state.insightsFromCache = true;
@@ -87,6 +99,17 @@ class DashboardPageModel {
         this.state.expenseDisplay = (0, money_1.formatNzdMinor)(summary.expenseMinor);
         this.state.fromCache = fromCache;
         this.state.cacheLabel = fromCache ? '缓存数据' : '';
+    }
+    clearPrivateState() {
+        this.state.summary = null;
+        this.state.accounts = [];
+        this.state.categories = [];
+        this.state.recentTransactions = [];
+        this.state.insights = [];
+        this.state.netWorthDisplay = '--';
+        this.state.incomeDisplay = '--';
+        this.state.expenseDisplay = '--';
+        this.state.cacheLabel = '';
     }
 }
 exports.DashboardPageModel = DashboardPageModel;

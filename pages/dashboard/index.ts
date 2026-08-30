@@ -62,14 +62,15 @@ export class DashboardPageModel {
       const [summary, accounts, categories] = await Promise.all([
         this.api.fetchSummary(period), this.api.fetchAccounts(), this.api.fetchCategories(),
       ]);
-      if (scope !== this.householdId()) return;
+      if (scope !== this.householdId()) { this.clearPrivateState(); return; }
       this.applySummary(summary, false);
       this.state.accounts = accounts;
       this.state.categories = categories;
       this.cache?.set(cacheKey, summary);
       await this.loadInsights(scope);
     } catch (error) {
-      const cached = scope === this.householdId() && error instanceof ApiError && (error.code === 'network' || error.code === 'timeout')
+      if (scope !== this.householdId()) { this.clearPrivateState(); return; }
+      const cached = error instanceof ApiError && (error.code === 'network' || error.code === 'timeout')
         ? this.cache?.read<DashboardSummary>(cacheKey, CACHE_TTL)
         : null;
       if (cached) {
@@ -87,12 +88,13 @@ export class DashboardPageModel {
     const cacheKey = `dashboard:${scope}:ai-insights`;
     try {
       const insights = await this.api.fetchAiInsights();
-      if (scope !== this.householdId()) return;
+      if (scope !== this.householdId()) { this.clearPrivateState(); return; }
       this.state.insights = insights;
       this.state.insightsFromCache = false;
       this.cache?.set(cacheKey, insights);
     } catch (error) {
-      const cached = scope === this.householdId() && error instanceof ApiError && (error.code === 'network' || error.code === 'timeout') ? this.cache?.read<AiInsight[]>(cacheKey, CACHE_TTL) : null;
+      if (scope !== this.householdId()) { this.clearPrivateState(); return; }
+      const cached = error instanceof ApiError && (error.code === 'network' || error.code === 'timeout') ? this.cache?.read<AiInsight[]>(cacheKey, CACHE_TTL) : null;
       if (cached) { this.state.insights = cached.data; this.state.insightsFromCache = true; }
     }
   }
@@ -111,6 +113,18 @@ export class DashboardPageModel {
     this.state.expenseDisplay = formatNzdMinor(summary.expenseMinor);
     this.state.fromCache = fromCache;
     this.state.cacheLabel = fromCache ? '缓存数据' : '';
+  }
+
+  private clearPrivateState(): void {
+    this.state.summary = null;
+    this.state.accounts = [];
+    this.state.categories = [];
+    this.state.recentTransactions = [];
+    this.state.insights = [];
+    this.state.netWorthDisplay = '--';
+    this.state.incomeDisplay = '--';
+    this.state.expenseDisplay = '--';
+    this.state.cacheLabel = '';
   }
 }
 

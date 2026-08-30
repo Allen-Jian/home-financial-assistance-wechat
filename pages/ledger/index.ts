@@ -120,7 +120,7 @@ export class LedgerListPageModel {
     this.state.selectedTransaction = null;
     try {
       const transactions = await this.api.fetchTransactions(period);
-      if (scope !== this.householdId()) return false;
+      if (scope !== this.householdId()) { this.clearPrivateState(); return false; }
       this.cache?.set(cacheKey, transactions);
       this.state.transactions = transactions.map((transaction) => ({
         ...transaction,
@@ -130,7 +130,8 @@ export class LedgerListPageModel {
       }));
       return true;
     } catch (error) {
-      const cached = scope === this.householdId() && error instanceof ApiError && (error.code === 'network' || error.code === 'timeout')
+      if (scope !== this.householdId()) { this.clearPrivateState(); return false; }
+      const cached = error instanceof ApiError && (error.code === 'network' || error.code === 'timeout')
         ? this.cache?.read<TransactionSummary[]>(cacheKey, 5 * 60_000)
         : null;
       if (cached) this.state.transactions = cached.data.map((transaction) => ({ ...transaction, amountDisplay: formatNzdMinor(transaction.amountMinor), dateDisplay: toDisplayDate(transaction.occurredAt), directionLabel: directionLabels[transaction.direction] }));
@@ -155,6 +156,7 @@ export class LedgerListPageModel {
   setCustomTo(value: string): void { this.state.customTo = value; }
 
   private cacheKey(period: LedgerPeriodQuery, scope = this.householdId()): string { return `ledger:${scope}:${period.from}:${period.to}`; }
+  private clearPrivateState(): void { this.state.transactions = []; this.state.selectedTransaction = null; this.state.error = ''; }
 
   shiftMonth(delta: number): LedgerPeriodQuery {
     const current = this.state.periodMode === 'month' ? this.state.period.from : this.currentPeriod().from;

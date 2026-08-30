@@ -97,8 +97,10 @@ class LedgerListPageModel {
         this.state.selectedTransaction = null;
         try {
             const transactions = await this.api.fetchTransactions(period);
-            if (scope !== this.householdId())
+            if (scope !== this.householdId()) {
+                this.clearPrivateState();
                 return false;
+            }
             (_a = this.cache) === null || _a === void 0 ? void 0 : _a.set(cacheKey, transactions);
             this.state.transactions = transactions.map((transaction) => ({
                 ...transaction,
@@ -109,7 +111,11 @@ class LedgerListPageModel {
             return true;
         }
         catch (error) {
-            const cached = scope === this.householdId() && error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout')
+            if (scope !== this.householdId()) {
+                this.clearPrivateState();
+                return false;
+            }
+            const cached = error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout')
                 ? (_b = this.cache) === null || _b === void 0 ? void 0 : _b.read(cacheKey, 5 * 60000)
                 : null;
             if (cached)
@@ -137,6 +143,7 @@ class LedgerListPageModel {
     setCustomFrom(value) { this.state.customFrom = value; }
     setCustomTo(value) { this.state.customTo = value; }
     cacheKey(period, scope = this.householdId()) { return `ledger:${scope}:${period.from}:${period.to}`; }
+    clearPrivateState() { this.state.transactions = []; this.state.selectedTransaction = null; this.state.error = ''; }
     shiftMonth(delta) {
         const current = this.state.periodMode === 'month' ? this.state.period.from : this.currentPeriod().from;
         const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Auckland', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(current));
