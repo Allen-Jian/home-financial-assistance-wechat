@@ -1,5 +1,4 @@
 import { ApiError } from '../../../src/api/client';
-import { parseNzdMinor } from '../../../src/domain/money';
 import type { DocumentDraft, StageResult } from '../../../src/api/contracts';
 import { getRuntime } from '../../../app';
 
@@ -15,7 +14,7 @@ export interface PhotoEntryApiPort {
   parseDraft?: (input: string) => Promise<DocumentDraft>;
   analyzePhoto?: (input: { filePath: string; fileName: string; contentType: string }) => Promise<DocumentDraft>;
   previewDocument?: (input: { filePath: string; fileName: string; contentType: string }) => Promise<DocumentDraft>;
-  stageImport?: (input: Record<string, unknown>) => Promise<StageResult & { batch?: { id?: string }; draft?: { id?: string } }>;
+  stageImport?: (input: Record<string, unknown>) => Promise<Partial<StageResult> & { batch?: { id?: string }; draft?: { id?: string } }>;
   uploadAttachment?: (input: { filePath: string; draftId: string; originalName: string; contentType: string }) => Promise<unknown>;
   confirmDraft?: (draftId: string, input?: Record<string, unknown>) => Promise<unknown>;
   createTransaction?: (input: Record<string, unknown>) => Promise<unknown>;
@@ -71,7 +70,7 @@ export class PhotoEntryPageModel {
             ? await this.api.parseDraft(file.path)
             : (() => { throw new Error('AI 分析暂不可用'); })();
       this.state.draft = draft;
-      if (this.api.stageImport) {
+      if (this.api.stageImport && this.api.confirmDraft) {
         const staged = await this.api.stageImport({ fileHash: hashFor(file), sourceType: 'manual-photo', draft });
         this.state.draftId = staged.draftId ?? staged.draft?.id ?? staged.batchId ?? staged.batch?.id ?? '';
         if (!staged.reused && this.api.uploadAttachment && this.state.draftId) {
@@ -92,6 +91,11 @@ export class PhotoEntryPageModel {
     if (this.state.draft) this.state.draft = { ...this.state.draft, ...patch };
   }
 
+  async retry(): Promise<boolean> {
+    if (!this.state.file) return false;
+    return this.analyze(this.state.file);
+  }
+
   async confirm(): Promise<boolean> {
     const draft = this.state.draft;
     if (!draft) { this.state.error = '请先分析小票'; return false; }
@@ -100,11 +104,11 @@ export class PhotoEntryPageModel {
     this.state.error = '';
     try {
       if (this.state.draftId && this.api.confirmDraft) {
-        await this.api.confirmDraft(this.state.draftId, {});
+        await this.api.confirmDraft(this.state.draftId, this.confirmationPayload(draft));
       } else if (this.api.createTransaction) {
         const payload: Record<string, unknown> = { direction: draft.direction, amountMinor: draft.amountMinor };
         if (draft.occurredAt) payload.occurredAt = draft.occurredAt;
-        if (draft.categoryHint) payload.categoryHint = draft.categoryHint;
+        if (draft.categoryHint) payload.categoryId = draft.categoryHint;
         if (draft.merchant) payload.merchant = draft.merchant;
         if (draft.note) payload.note = draft.note;
         await this.api.createTransaction(payload);
@@ -121,11 +125,21 @@ export class PhotoEntryPageModel {
       this.state.loading = false;
     }
   }
+
+  private confirmationPayload(draft: DocumentDraft): Record<string, unknown> {
+    const payload: Record<string, unknown> = { direction: draft.direction, amountMinor: draft.amountMinor };
+    if (draft.occurredAt) payload.occurredAt = draft.occurredAt;
+    if (draft.categoryHint) payload.categoryId = draft.categoryHint;
+    if (draft.merchant) payload.merchant = draft.merchant;
+    if (draft.note) payload.note = draft.note;
+    return payload;
+  }
 }
 
 interface PageContext { setData(data: unknown): void }
 interface WxPhotoRuntime {
   chooseMedia(options: { count: number; mediaType: string[]; sourceType: string[]; success: (result: { tempFiles: Array<{ tempFilePath?: string; path?: string; name?: string; size?: number; fileType?: string }> }) => void; fail: (error: unknown) => void }): void;
+  navigateTo(options: { url: string }): void;
 }
 declare const wx: WxPhotoRuntime;
 
@@ -143,6 +157,8 @@ export function createPhotoEntryPage(model: PhotoEntryPageModel) {
         fail: () => this.setData(model.state),
       });
     },
+    async retry(this: PageContext) { await model.retry(); this.setData(model.state); },
+    openManual() { wx.navigateTo({ url: '/pages/ledger/edit/index' }); },
     onDraftInput(this: PageContext, event: { currentTarget?: { dataset?: { field?: keyof DocumentDraft } }; detail?: { value?: string } }) {
       const field = event.currentTarget?.dataset?.field;
       const value = event.detail?.value;

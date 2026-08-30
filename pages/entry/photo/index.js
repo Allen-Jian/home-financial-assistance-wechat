@@ -45,7 +45,7 @@ class PhotoEntryPageModel {
                         ? await this.api.parseDraft(file.path)
                         : (() => { throw new Error('AI 分析暂不可用'); })();
             this.state.draft = draft;
-            if (this.api.stageImport) {
+            if (this.api.stageImport && this.api.confirmDraft) {
                 const staged = await this.api.stageImport({ fileHash: hashFor(file), sourceType: 'manual-photo', draft });
                 this.state.draftId = (_f = (_d = (_c = (_a = staged.draftId) !== null && _a !== void 0 ? _a : (_b = staged.draft) === null || _b === void 0 ? void 0 : _b.id) !== null && _c !== void 0 ? _c : staged.batchId) !== null && _d !== void 0 ? _d : (_e = staged.batch) === null || _e === void 0 ? void 0 : _e.id) !== null && _f !== void 0 ? _f : '';
                 if (!staged.reused && this.api.uploadAttachment && this.state.draftId) {
@@ -67,6 +67,11 @@ class PhotoEntryPageModel {
         if (this.state.draft)
             this.state.draft = { ...this.state.draft, ...patch };
     }
+    async retry() {
+        if (!this.state.file)
+            return false;
+        return this.analyze(this.state.file);
+    }
     async confirm() {
         const draft = this.state.draft;
         if (!draft) {
@@ -81,14 +86,14 @@ class PhotoEntryPageModel {
         this.state.error = '';
         try {
             if (this.state.draftId && this.api.confirmDraft) {
-                await this.api.confirmDraft(this.state.draftId, {});
+                await this.api.confirmDraft(this.state.draftId, this.confirmationPayload(draft));
             }
             else if (this.api.createTransaction) {
                 const payload = { direction: draft.direction, amountMinor: draft.amountMinor };
                 if (draft.occurredAt)
                     payload.occurredAt = draft.occurredAt;
                 if (draft.categoryHint)
-                    payload.categoryHint = draft.categoryHint;
+                    payload.categoryId = draft.categoryHint;
                 if (draft.merchant)
                     payload.merchant = draft.merchant;
                 if (draft.note)
@@ -112,6 +117,18 @@ class PhotoEntryPageModel {
             this.state.loading = false;
         }
     }
+    confirmationPayload(draft) {
+        const payload = { direction: draft.direction, amountMinor: draft.amountMinor };
+        if (draft.occurredAt)
+            payload.occurredAt = draft.occurredAt;
+        if (draft.categoryHint)
+            payload.categoryId = draft.categoryHint;
+        if (draft.merchant)
+            payload.merchant = draft.merchant;
+        if (draft.note)
+            payload.note = draft.note;
+        return payload;
+    }
 }
 exports.PhotoEntryPageModel = PhotoEntryPageModel;
 function createPhotoEntryPage(model) {
@@ -130,6 +147,8 @@ function createPhotoEntryPage(model) {
                 fail: () => this.setData(model.state),
             });
         },
+        async retry() { await model.retry(); this.setData(model.state); },
+        openManual() { wx.navigateTo({ url: '/pages/ledger/edit/index' }); },
         onDraftInput(event) {
             var _a, _b, _c;
             const field = (_b = (_a = event.currentTarget) === null || _a === void 0 ? void 0 : _a.dataset) === null || _b === void 0 ? void 0 : _b.field;
