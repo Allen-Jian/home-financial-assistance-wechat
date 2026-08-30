@@ -91,7 +91,7 @@ export class PhotoEntryPageModel {
         }
       }
       if (this.api.stageImport && this.api.confirmDraft) {
-        const staged = await this.api.stageImport({ fileHash: hashFor(file), sourceType: 'manual-photo', draft });
+        const staged = await this.api.stageImport({ fileHash: hashFor(file), sourceType: 'manual-photo', draft: this.state.draft ?? draft });
         this.state.draftId = staged.draftId ?? staged.draft?.id ?? '';
         if (staged.reused && !this.state.draftId) {
           this.state.stagedExisting = true;

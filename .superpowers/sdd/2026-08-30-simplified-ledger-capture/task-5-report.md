@@ -30,4 +30,6 @@ Status: complete
 - Reused import batches without a real draft ID are shown as already existing and cannot be confirmed through a batch ID.
 - Active categories are loaded and AI category names are mapped to matching IDs by direction; unmatched names are omitted.
 - Edited merchant and note values, including empty strings, are retained in confirmation overrides.
+- Mapped category IDs are included in the staged draft so later draft review retains the selected category.
+- Reused responses containing only `batch.id` are treated as existing items; no attachment upload or confirmation is attempted.
 - Follow-up verification: `npm test -- --runInBand` — PASS, 23 suites / 67 tests; typecheck, build:wechat, and diff-check also pass.

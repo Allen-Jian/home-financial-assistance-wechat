@@ -27,7 +27,7 @@ class PhotoEntryPageModel {
         this.editedFields = new Set();
     }
     async analyze(file) {
-        var _a, _b, _c;
+        var _a, _b, _c, _d;
         this.state.file = file;
         this.state.originalPreserved = true;
         this.state.draft = null;
@@ -61,8 +61,8 @@ class PhotoEntryPageModel {
                 }
             }
             if (this.api.stageImport && this.api.confirmDraft) {
-                const staged = await this.api.stageImport({ fileHash: hashFor(file), sourceType: 'manual-photo', draft });
-                this.state.draftId = (_c = (_a = staged.draftId) !== null && _a !== void 0 ? _a : (_b = staged.draft) === null || _b === void 0 ? void 0 : _b.id) !== null && _c !== void 0 ? _c : '';
+                const staged = await this.api.stageImport({ fileHash: hashFor(file), sourceType: 'manual-photo', draft: (_a = this.state.draft) !== null && _a !== void 0 ? _a : draft });
+                this.state.draftId = (_d = (_b = staged.draftId) !== null && _b !== void 0 ? _b : (_c = staged.draft) === null || _c === void 0 ? void 0 : _c.id) !== null && _d !== void 0 ? _d : '';
                 if (staged.reused && !this.state.draftId) {
                     this.state.stagedExisting = true;
                     this.state.error = '该小票已存在，请稍后处理';

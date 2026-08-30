@@ -68,10 +68,11 @@ test('offers retry after AI failure without losing the selected file', async () 
 
 test('does not use a reused batch id as a draft id', async () => {
   const parseDraft = jest.fn().mockResolvedValue({ amountMinor: 1890, direction: 'expense' });
-  const stageImport = jest.fn().mockResolvedValue({ batchId: 'batch-1', reused: true });
+  const stageImport = jest.fn().mockResolvedValue({ batch: { id: 'batch-1' }, reused: true });
   const confirmDraft = jest.fn();
   const createTransaction = jest.fn();
-  const model = new PhotoEntryPageModel({ parseDraft, stageImport, confirmDraft, createTransaction });
+  const uploadAttachment = jest.fn();
+  const model = new PhotoEntryPageModel({ parseDraft, stageImport, confirmDraft, createTransaction, uploadAttachment });
 
   await expect(model.analyze({ path: '/tmp/receipt.jpg', name: 'receipt.jpg' })).resolves.toBe(true);
   await expect(model.confirm()).resolves.toBe(false);
@@ -80,14 +81,17 @@ test('does not use a reused batch id as a draft id', async () => {
   expect(model.state.error).toContain('已存在');
   expect(confirmDraft).not.toHaveBeenCalled();
   expect(createTransaction).not.toHaveBeenCalled();
+  expect(uploadAttachment).not.toHaveBeenCalled();
 });
 
 test('maps an AI category name to an active category id before confirmation', async () => {
   const parseDraft = jest.fn().mockResolvedValue({ amountMinor: 1890, direction: 'expense', categoryHint: '餐饮' });
-  const createTransaction = jest.fn().mockResolvedValue({ id: 'tx-1' });
+  const stageImport = jest.fn().mockResolvedValue({ draftId: 'draft-1', reused: false });
+  const confirmDraft = jest.fn().mockResolvedValue({ id: 'tx-1' });
   const model = new PhotoEntryPageModel({
     parseDraft,
-    createTransaction,
+    stageImport,
+    confirmDraft,
     fetchCategories: jest.fn().mockResolvedValue([
       { id: 'c-1', name: '餐饮', direction: 'expense', active: true },
       { id: 'c-2', name: '餐饮', direction: 'expense', active: false },
@@ -97,8 +101,10 @@ test('maps an AI category name to an active category id before confirmation', as
   await model.analyze({ path: '/tmp/receipt.jpg', name: 'receipt.jpg' });
   await expect(model.confirm()).resolves.toBe(true);
 
-  expect(createTransaction).toHaveBeenCalledWith(expect.objectContaining({ categoryId: 'c-1' }));
-  expect(createTransaction).not.toHaveBeenCalledWith(expect.objectContaining({ categoryHint: expect.anything() }));
+  expect(stageImport).toHaveBeenCalledWith(expect.objectContaining({
+    draft: expect.objectContaining({ categoryId: 'c-1' }),
+  }));
+  expect(confirmDraft).toHaveBeenCalledWith('draft-1', expect.objectContaining({ categoryId: 'c-1' }));
 });
 
 test('sends empty merchant and note when the user clears them', async () => {
