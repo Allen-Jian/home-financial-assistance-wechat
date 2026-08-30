@@ -36,3 +36,11 @@ test('custom dates use Auckland day boundaries and month navigation', () => {
   const next = model.shiftMonth(1);
   expect(next.from).toMatch(/2026-09-01T11:00:00\.000Z|2026-08-31T12:00:00\.000Z/);
 });
+
+test('custom Auckland boundaries handle daylight-saving transitions', () => {
+  const model = new LedgerListPageModel({ fetchTransactions: jest.fn().mockResolvedValue([]) });
+  model.setPeriod('custom', '2026-09-27', '2026-09-27');
+  expect(model.currentPeriod().from).toBe('2026-09-26T12:00:00.000Z');
+  model.setPeriod('custom', '2026-04-05', '2026-04-05');
+  expect(model.currentPeriod().from).toBe('2026-04-04T11:00:00.000Z');
+});

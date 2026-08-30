@@ -60,13 +60,18 @@ function customBoundary(value: string, end = false): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return value;
   const [year, month, day] = match.slice(1).map(Number);
-  const utcGuess = new Date(Date.UTC(year, month - 1, day + (end ? 1 : 0), 12));
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Auckland', timeZoneName: 'longOffset', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(utcGuess);
-  const rawZone = parts.find((part) => part.type === 'timeZoneName')?.value?.replace('GMT', '') || '+12:00';
-  const zone = /^[-+]\d{2}:\d{2}$/.test(rawZone) ? rawZone : `${rawZone}:00`;
-  const target = `${utcGuess.getUTCFullYear().toString().padStart(4, '0')}-${(utcGuess.getUTCMonth() + 1).toString().padStart(2, '0')}-${utcGuess.getUTCDate().toString().padStart(2, '0')}`;
-  const date = new Date(`${target}T00:00:00${zone}`);
-  return date.toISOString();
+  const target = Date.UTC(year, month - 1, day + (end ? 1 : 0));
+  let guess = target;
+  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Auckland', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const parts = formatter.formatToParts(new Date(guess));
+    const read = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
+    const observed = Date.UTC(read('year'), read('month') - 1, read('day'), read('hour') === 24 ? 0 : read('hour'), read('minute'), read('second'));
+    const next = target - (observed - guess);
+    if (next === guess) return new Date(next).toISOString();
+    guess = next;
+  }
+  return new Date(guess).toISOString();
 }
 
 function toDisplayDate(value: string): string {
@@ -325,7 +330,7 @@ export function createLedgerListPage(model: LedgerListPageModel) {
         model.state.error = '开始日期不能晚于结束日期';
       } else {
         model.setPeriod('custom', model.state.customFrom, model.state.customTo);
-        await model.load(model.state.period);
+        await model.load(model.currentPeriod());
       }
       this.setData(model.state);
     },
@@ -356,5 +361,5 @@ declare function getApp<T>(): T;
 declare const wx: { navigateTo(options: { url: string }): void };
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  Page(createLedgerListPage(new LedgerListPageModel(runtime.api as unknown as LedgerListApiPort)));
+  Page(createLedgerListPage(new LedgerListPageModel(runtime.api as unknown as LedgerListApiPort, undefined, runtime.cache)));
 }

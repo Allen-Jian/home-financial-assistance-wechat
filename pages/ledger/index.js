@@ -31,18 +31,23 @@ function aucklandBoundary(value) {
     return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}${offset}`;
 }
 function customBoundary(value, end = false) {
-    var _a, _b;
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
     if (!match)
         return value;
     const [year, month, day] = match.slice(1).map(Number);
-    const utcGuess = new Date(Date.UTC(year, month - 1, day + (end ? 1 : 0), 12));
-    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Auckland', timeZoneName: 'longOffset', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(utcGuess);
-    const rawZone = ((_b = (_a = parts.find((part) => part.type === 'timeZoneName')) === null || _a === void 0 ? void 0 : _a.value) === null || _b === void 0 ? void 0 : _b.replace('GMT', '')) || '+12:00';
-    const zone = /^[-+]\d{2}:\d{2}$/.test(rawZone) ? rawZone : `${rawZone}:00`;
-    const target = `${utcGuess.getUTCFullYear().toString().padStart(4, '0')}-${(utcGuess.getUTCMonth() + 1).toString().padStart(2, '0')}-${utcGuess.getUTCDate().toString().padStart(2, '0')}`;
-    const date = new Date(`${target}T00:00:00${zone}`);
-    return date.toISOString();
+    const target = Date.UTC(year, month - 1, day + (end ? 1 : 0));
+    let guess = target;
+    const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Pacific/Auckland', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        const parts = formatter.formatToParts(new Date(guess));
+        const read = (type) => { var _a, _b; return Number((_b = (_a = parts.find((part) => part.type === type)) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : 0); };
+        const observed = Date.UTC(read('year'), read('month') - 1, read('day'), read('hour') === 24 ? 0 : read('hour'), read('minute'), read('second'));
+        const next = target - (observed - guess);
+        if (next === guess)
+            return new Date(next).toISOString();
+        guess = next;
+    }
+    return new Date(guess).toISOString();
 }
 function toDisplayDate(value) {
     const date = new Date(value);
@@ -308,7 +313,7 @@ function createLedgerListPage(model) {
             }
             else {
                 model.setPeriod('custom', model.state.customFrom, model.state.customTo);
-                await model.load(model.state.period);
+                await model.load(model.currentPeriod());
             }
             this.setData(model.state);
         },
@@ -338,5 +343,5 @@ function createLedgerListPage(model) {
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
     const runtime = (0, app_1.getRuntime)();
-    Page(createLedgerListPage(new LedgerListPageModel(runtime.api)));
+    Page(createLedgerListPage(new LedgerListPageModel(runtime.api, undefined, runtime.cache)));
 }
