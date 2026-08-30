@@ -106,9 +106,12 @@ export interface ImportedRow {
 }
 
 export interface StageResult {
-  batchId: string;
-  draftCount: number;
   reused: boolean;
+  batch?: { id: string };
+  draft?: { id: string };
+  drafts?: Array<{ id: string }>;
+  batchId?: string;
+  draftCount?: number;
   draftId?: string;
 }
 

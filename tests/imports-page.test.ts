@@ -70,3 +70,24 @@ test('uses the file hash for idempotent staging and uploads only after staging',
   expect(api.uploadAttachment).toHaveBeenCalledTimes(1);
   expect(api.uploadAttachment.mock.invocationCallOrder[0]).toBeGreaterThan(api.stageImport.mock.invocationCallOrder[0]);
 });
+
+test('uses the nested draft id when staging a photo import', async () => {
+  const { model, api } = makeModel([image]);
+  api.stageImport.mockResolvedValueOnce({ batch: { id: 'batch-1' }, draft: { id: 'draft-1' }, reused: false });
+
+  await model.choosePhoto();
+  await expect(model.stage()).resolves.toBe(true);
+
+  expect(api.uploadAttachment).toHaveBeenCalledWith(expect.objectContaining({ draftId: 'draft-1' }));
+});
+
+test('stages nested CSV batches without uploading a batch as a draft attachment', async () => {
+  const { model, api } = makeModel([csv]);
+  api.stageAnzCsv.mockResolvedValueOnce({ batch: { id: 'batch-csv' }, drafts: [{ id: 'draft-csv' }], reused: false });
+
+  await model.chooseCsv();
+  await expect(model.stage()).resolves.toBe(true);
+
+  expect(api.stageAnzCsv).toHaveBeenCalledTimes(1);
+  expect(api.uploadAttachment).not.toHaveBeenCalled();
+});

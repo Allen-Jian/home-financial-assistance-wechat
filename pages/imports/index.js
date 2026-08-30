@@ -110,7 +110,7 @@ class ImportPageModel {
         }
     }
     async stage() {
-        var _a, _b;
+        var _a, _b, _c;
         const file = this.state.file;
         if (!this.content || !this.state.sourceType)
             return this.reject('请先选择文件或输入账目描述');
@@ -128,8 +128,9 @@ class ImportPageModel {
                 : await this.api.stageImport({ fileHash, sourceType: this.state.sourceType, draft: (_a = this.state.preview) !== null && _a !== void 0 ? _a : undefined });
             this.state.stageResult = result;
             this.staged.set(fileHash, result);
-            if (!result.reused && file) {
-                await this.api.uploadAttachment({ filePath: file.path, draftId: (_b = result.draftId) !== null && _b !== void 0 ? _b : result.batchId, originalName: file.name, contentType: file.contentType });
+            const draftId = (_c = (_b = result.draft) === null || _b === void 0 ? void 0 : _b.id) !== null && _c !== void 0 ? _c : result.draftId;
+            if (!result.reused && file && this.state.sourceType !== 'anz-csv' && draftId) {
+                await this.api.uploadAttachment({ filePath: file.path, draftId, originalName: file.name, contentType: file.contentType });
                 this.state.uploaded = true;
             }
             return true;

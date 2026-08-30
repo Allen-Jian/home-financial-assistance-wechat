@@ -187,8 +187,9 @@ export class ImportPageModel {
         : await this.api.stageImport({ fileHash, sourceType: this.state.sourceType, draft: this.state.preview ?? undefined });
       this.state.stageResult = result;
       this.staged.set(fileHash, result);
-      if (!result.reused && file) {
-        await this.api.uploadAttachment({ filePath: file.path, draftId: result.draftId ?? result.batchId, originalName: file.name, contentType: file.contentType });
+      const draftId = result.draft?.id ?? result.draftId;
+      if (!result.reused && file && this.state.sourceType !== 'anz-csv' && draftId) {
+        await this.api.uploadAttachment({ filePath: file.path, draftId, originalName: file.name, contentType: file.contentType });
         this.state.uploaded = true;
       }
       return true;
