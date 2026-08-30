@@ -26,3 +26,13 @@ test('ledger formats read-only transactions and exposes a selected detail', asyn
   model.selectTransaction('tx-1');
   expect(model.state.selectedTransaction).toEqual(transaction);
 });
+
+test('custom dates use Auckland day boundaries and month navigation', () => {
+  const model = new LedgerListPageModel({ fetchTransactions: jest.fn().mockResolvedValue([]) }, () => new Date('2026-08-20T00:00:00Z'));
+  model.setPeriod('custom', '2026-01-01', '2026-01-31');
+  expect(model.currentPeriod().from).toMatch(/2025-12-31T11:00:00\.000Z|2025-12-31T12:00:00\.000Z/);
+  expect(model.currentPeriod().to).toMatch(/2026-01-31T11:00:00\.000Z|2026-01-31T12:00:00\.000Z/);
+  model.setPeriod('month');
+  const next = model.shiftMonth(1);
+  expect(next.from).toMatch(/2026-09-01T11:00:00\.000Z|2026-08-31T12:00:00\.000Z/);
+});

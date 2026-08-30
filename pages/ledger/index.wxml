@@ -1,7 +1,9 @@
 <view class="page ledger-list-page">
   <view class="page-title"><text>账目</text><text class="sub">只读查看已确认的收入与支出</text></view>
   <view class="period-tabs">
+    <button bindtap="changeMonth" data-delta="-1">上月</button>
     <button bindtap="changePeriod" data-mode="month" class="{{periodMode === 'month' ? 'active' : ''}}">本月</button>
+    <button bindtap="changeMonth" data-delta="1">下月</button>
     <button bindtap="changePeriod" data-mode="year" class="{{periodMode === 'year' ? 'active' : ''}}">本年</button>
     <button bindtap="changePeriod" data-mode="custom" class="{{periodMode === 'custom' ? 'active' : ''}}">自定义</button>
   </view>
@@ -20,9 +22,9 @@
   </view>
   <view wx:if="{{selectedTransaction}}" class="detail-panel">
     <view class="detail-header"><text>账目详情</text><text bindtap="closeDetail" class="close">关闭</text></view>
-    <view class="detail-row"><text>类型</text><text>{{selectedTransaction.direction === 'income' ? '收入' : selectedTransaction.direction === 'expense' ? '支出' : selectedTransaction.direction === 'transfer' ? '转账' : '调整'}}</text></view>
-    <view class="detail-row"><text>金额</text><text>NZ$ {{selectedTransaction.amountMinor / 100}}</text></view>
-    <view class="detail-row"><text>日期</text><text>{{selectedTransaction.occurredAt}}</text></view>
+    <view class="detail-row"><text>类型</text><text>{{selectedDirectionLabel}}</text></view>
+    <view class="detail-row"><text>金额</text><text>{{selectedAmountDisplay}}</text></view>
+    <view class="detail-row"><text>日期</text><text>{{selectedDateDisplay}}</text></view>
     <view wx:if="{{selectedTransaction.merchant}}" class="detail-row"><text>商户</text><text>{{selectedTransaction.merchant}}</text></view>
     <view wx:if="{{selectedTransaction.note}}" class="detail-row"><text>备注</text><text>{{selectedTransaction.note}}</text></view>
   </view>
