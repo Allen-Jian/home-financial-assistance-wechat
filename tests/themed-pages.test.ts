@@ -12,6 +12,12 @@ const snapshot = {
   tokens: {} as never,
 };
 
+function rootAfterThemeMeta(wxml: string): { tag: string; classAttribute: string } | null {
+  const afterMeta = wxml.trimStart().replace(/^<page-meta\s+page-style="\{\{themePageStyle\}\}"\s*\/>/, '').trimStart();
+  const root = afterMeta.match(/^<([a-z][\w-]*)\b([^>]*)>/i);
+  return root ? { tag: root[1], classAttribute: root[2] } : null;
+}
+
 test('provides a themed page lifecycle wrapper', () => {
   const modulePath = resolve(__dirname, '../src/shared/themed-page.ts');
   expect(existsSync(modulePath)).toBe(true);
@@ -48,13 +54,30 @@ test('composes existing lifecycle methods and disposes its subscription once', (
   expect(offTheme).toHaveBeenCalledTimes(1);
 });
 
-test('every configured page starts with page-meta bound to themePageStyle', () => {
+test('every configured page registers the themed wrapper in TS and generated JS', () => {
+  const app = require('../app.json') as { pages: string[] };
+
+  for (const page of app.pages) {
+    const source = readFileSync(resolve(__dirname, `../${page}.ts`), 'utf8');
+    const generated = readFileSync(resolve(__dirname, `../${page}.js`), 'utf8');
+    expect(source).toMatch(/Page\(withThemePage\(/);
+    expect(generated).toMatch(/Page\([^\n]*withThemePage\)/);
+  }
+});
+
+test('every configured page starts with page-meta and binds themeClass on its root', () => {
   const app = require('../app.json') as { pages: string[] };
 
   for (const page of app.pages) {
     const wxml = readFileSync(resolve(__dirname, `../${page}.wxml`), 'utf8');
     const firstNode = wxml.trimStart().match(/^<page-meta\s+page-style="\{\{themePageStyle\}\}"\s*\/>/);
     expect(firstNode?.[0]).toBe('<page-meta page-style="{{themePageStyle}}" />');
-    expect(wxml).toMatch(/class="[^"]*\{\{themeClass\}\}/);
+    expect(rootAfterThemeMeta(wxml)).toEqual(expect.objectContaining({ tag: 'view' }));
+    expect(rootAfterThemeMeta(wxml)?.classAttribute).toContain('{{themeClass}}');
   }
+});
+
+test('root theme assertion does not accept a nested-only themeClass binding', () => {
+  const fixture = '<page-meta page-style="{{themePageStyle}}" /><view class="page"><view class="{{themeClass}}" /></view>';
+  expect(rootAfterThemeMeta(fixture)?.classAttribute).not.toContain('{{themeClass}}');
 });

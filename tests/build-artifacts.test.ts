@@ -1,5 +1,21 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
+import * as ts from 'typescript';
+
+function normalize(value: string): string {
+  return value.replace(/\r\n/g, '\n').trim();
+}
+
+function transpile(source: string): string {
+  return ts.transpileModule(source, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2019,
+      module: ts.ModuleKind.CommonJS,
+      sourceMap: false,
+      declaration: false,
+    },
+  }).outputText;
+}
 
 test('wechat build emits app and every configured page as javascript', () => {
   const app = require('../app.json') as { pages: string[] };
@@ -9,8 +25,16 @@ test('wechat build emits app and every configured page as javascript', () => {
   }
 });
 
-test('wechat build emits the shared themed page wrapper', () => {
-  expect(existsSync(resolve(__dirname, '../src/shared/themed-page.js'))).toBe(true);
+test('wechat build keeps every themed page and wrapper JS artifact in sync with TS', () => {
+  const app = require('../app.json') as { pages: string[] };
+  const sources = [...app.pages.map((page) => `${page}`), 'src/shared/themed-page'];
+
+  for (const source of sources) {
+    const tsPath = resolve(__dirname, `../${source}.ts`);
+    const jsPath = resolve(__dirname, `../${source}.js`);
+    expect(existsSync(jsPath)).toBe(true);
+    expect(normalize(readFileSync(jsPath, 'utf8'))).toBe(normalize(transpile(readFileSync(tsPath, 'utf8'))));
+  }
 });
 
 test('wechat build includes javascript for every registered custom component', () => {

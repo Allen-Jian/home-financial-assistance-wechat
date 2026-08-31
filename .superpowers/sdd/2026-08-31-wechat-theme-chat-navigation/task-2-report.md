@@ -30,3 +30,23 @@ Status: DONE_WITH_CONCERNS
 
 - The worktree contained pre-existing user-approved edits in several Task 2 page files; the required new commit includes the current contents of those same files. No unrelated paths were modified or cleaned.
 - Device-level verification of native navigation bars, overscroll backgrounds, and system theme switching remains pending.
+
+## Fix round 1 — Sol review findings
+
+### RED evidence
+
+- Temporarily removed the login page `withThemePage` call. `npm test -- tests/themed-pages.test.ts` failed on the per-page TS registration assertion while the generated JS assertion remained able to identify the stale artifact.
+- Temporarily removed `{{themeClass}}` from the dashboard root. `npm test -- tests/themed-pages.test.ts -t "starts with page-meta"` failed on the root class assertion.
+- Temporarily changed generated login JS from `withThemePage` to `withThemePageX`. `npm test -- tests/build-artifacts.test.ts -t "keeps every themed"` failed with the TS-transpiled/JS artifact diff.
+- All mutations were immediately restored.
+
+### GREEN evidence
+
+- `npm test -- tests/themed-pages.test.ts tests/build-artifacts.test.ts` — 10 tests passed.
+- `npm run typecheck` — passed.
+- `npm run build:wechat` — passed.
+- `git diff --check` — passed; only existing LF/CRLF conversion warnings were emitted.
+
+### Fix-round commit
+
+- Pending commit for the strengthened test coverage and this report append.
