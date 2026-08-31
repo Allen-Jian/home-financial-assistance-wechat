@@ -75,3 +75,36 @@ npm test -- tests/settings-pages.test.ts -t "appearance|production more page|mar
 - `git diff --check`：通过。
 
 修复提交：`335dd82` — `fix: validate appearance preferences and markup`。
+
+## Fix round 2
+
+### RED
+
+增强设置页回归：
+
+- 非法值、接近当前值的 `dark ` 和缺失值都从已选深色开始，并 spy 实际 `ThemeRuntime.setPreference()`；要求调用次数为 0、存储和页面状态不变。
+- WXML 断言先移除注释，再结构化定位 `appearance-control`，要求真实 warning `text` 节点带 `wx:if="{{themePersistenceWarning}}"`、精确 class 和文本绑定，位于 `appearance-selector` 之后且仍在外观控件内。
+- 删除真实 warning 节点并留下注释诱饵的变异必须失败；同时验证生产页经 `withThemePage` 读取已存储主题。
+
+为证明新增 spy 回归能够捕获退化，临时对生成 JS 做未提交回退后运行：
+
+```powershell
+npm test -- tests/settings-pages.test.ts -t "appearance|production more page|markup"
+```
+
+结果：失败（预期），三种非法输入均被旧实现写成 `system`；WXML 结构与包装页测试正常通过。随后由 TypeScript 重新生成 JS，未提交临时回退。
+
+### GREEN
+
+- `onAppearanceSelect` 的三值白名单及早退行为保持通过。
+- 注释安全、结构化 WXML 契约和 spy 调用次数均通过。
+
+验证结果：
+
+- Task 3/主题定向：2 suites / 27 tests 通过。
+- 全量 Jest：28 suites / 140 tests 通过。
+- `npm run typecheck`：通过。
+- `npm run build:wechat`：通过。
+- `git diff --check`：通过。
+
+修复轮次测试提交：待提交。
