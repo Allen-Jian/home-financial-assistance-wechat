@@ -123,3 +123,62 @@ test('does not block page updates when native color interfaces fail', () => {
   expect(result.snapshot.resolvedTheme).toBe('dark');
   expect(listener).toHaveBeenLastCalledWith(result.snapshot);
 });
+
+test('continues publishing when one subscriber throws', () => {
+  const storage = new MemoryStorage();
+  const system = nativeTheme();
+  const runtime = new ThemeRuntime(storage, system.native);
+  let shouldThrow = false;
+  const first = jest.fn(() => {
+    if (shouldThrow) throw new Error('subscriber failed');
+  });
+  const later = jest.fn();
+  runtime.subscribe(first);
+  runtime.subscribe(later);
+  shouldThrow = true;
+
+  expect(() => runtime.setPreference('dark')).not.toThrow();
+  expect(later).toHaveBeenLastCalledWith(runtime.getSnapshot());
+});
+
+test('does not retain a subscriber whose initial notification throws', () => {
+  const storage = new MemoryStorage();
+  const system = nativeTheme();
+  const runtime = new ThemeRuntime(storage, system.native);
+  const failing = jest.fn(() => { throw new Error('initial notification failed'); });
+  const later = jest.fn();
+
+  expect(() => runtime.subscribe(failing)).toThrow('initial notification failed');
+  runtime.subscribe(later);
+  expect(() => runtime.setPreference('dark')).not.toThrow();
+  expect(failing).toHaveBeenCalledTimes(1);
+  expect(later).toHaveBeenLastCalledWith(runtime.getSnapshot());
+});
+
+test('persists the preference under the versioned theme key as JSON', () => {
+  const setStorageSync = jest.fn();
+  const storage: StorageLike = {
+    getStorageSync: () => undefined,
+    setStorageSync,
+    removeStorageSync: jest.fn(),
+  };
+  const runtime = new ThemeRuntime(storage, nativeTheme().native);
+
+  runtime.setPreference('dark');
+
+  expect(setStorageSync).toHaveBeenCalledWith(THEME_STORAGE_KEY, JSON.stringify('dark'));
+});
+
+test('dispose unregisters the exact system theme listener', () => {
+  const system = nativeTheme();
+  const onThemeChange = jest.fn();
+  const offThemeChange = jest.fn();
+  system.native.onThemeChange = onThemeChange;
+  system.native.offThemeChange = offThemeChange;
+  const runtime = new ThemeRuntime(new MemoryStorage(), system.native);
+
+  runtime.dispose();
+
+  expect(onThemeChange).toHaveBeenCalledTimes(1);
+  expect(offThemeChange).toHaveBeenCalledWith(onThemeChange.mock.calls[0][0]);
+});

@@ -58,8 +58,8 @@ class ThemeRuntime {
         return { persisted, snapshot: this.publish() };
     }
     subscribe(listener) {
-        this.listeners.add(listener);
         listener(this.snapshot);
+        this.listeners.add(listener);
         return () => this.listeners.delete(listener);
     }
     dispose() {
@@ -120,8 +120,14 @@ class ThemeRuntime {
         catch {
             // Native color APIs are best-effort; page subscribers still receive the theme.
         }
-        for (const listener of this.listeners)
-            listener(this.snapshot);
+        for (const listener of this.listeners) {
+            try {
+                listener(this.snapshot);
+            }
+            catch {
+                // One page must not prevent other subscribers from receiving the theme.
+            }
+        }
         return this.snapshot;
     }
 }
