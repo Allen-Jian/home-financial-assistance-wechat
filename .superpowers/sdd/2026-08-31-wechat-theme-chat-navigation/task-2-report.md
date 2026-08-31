@@ -49,4 +49,4 @@ Status: DONE_WITH_CONCERNS
 
 ### Fix-round commit
 
-- Pending commit for the strengthened test coverage and this report append.
+- `9e8fbc3 test: harden themed page artifact coverage`
