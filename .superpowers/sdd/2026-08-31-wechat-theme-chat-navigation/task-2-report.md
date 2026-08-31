@@ -70,3 +70,22 @@ Status: DONE_WITH_CONCERNS
 ### Fix-round commit
 
 - `d826ddc test: use project config for theme artifact checks`
+
+## Fix round 3 — root class attribute boundary
+
+### RED evidence
+
+- Added a `data-class="{{themeClass}}"` negative fixture. The existing `\bclass=` matcher incorrectly accepted it, and `npm test -- tests/themed-pages.test.ts -t "data-class"` failed.
+
+### GREEN evidence
+
+- Tightened parsing to require `class=` at the start or a whitespace attribute boundary.
+- `npm test -- tests/themed-pages.test.ts tests/build-artifacts.test.ts` — 14 tests passed.
+- `npm test -- --runInBand` — 28 suites, 132 tests passed.
+- `npm run typecheck` — passed.
+- `npm run build:wechat` — passed.
+- `git diff --check` — passed; only existing LF/CRLF conversion warnings were emitted.
+
+### Fix-round commit
+
+- `64562ea test: require exact root class attribute`
