@@ -58,8 +58,14 @@ class ThemeRuntime {
         return { persisted, snapshot: this.publish() };
     }
     subscribe(listener) {
-        listener(this.snapshot);
         this.listeners.add(listener);
+        try {
+            listener(this.snapshot);
+        }
+        catch (error) {
+            this.listeners.delete(listener);
+            throw error;
+        }
         return () => this.listeners.delete(listener);
     }
     dispose() {

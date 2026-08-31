@@ -182,3 +182,21 @@ test('dispose unregisters the exact system theme listener', () => {
   expect(onThemeChange).toHaveBeenCalledTimes(1);
   expect(offThemeChange).toHaveBeenCalledWith(onThemeChange.mock.calls[0][0]);
 });
+
+test('registers before initial notification so synchronous re-entrancy receives nested publications', () => {
+  const runtime = new ThemeRuntime(new MemoryStorage(), nativeTheme().native);
+  const snapshots: string[] = [];
+  let firstNotification = true;
+  const listener = jest.fn((snapshot: { resolvedTheme: 'light' | 'dark' }) => {
+    snapshots.push(snapshot.resolvedTheme);
+    if (firstNotification) {
+      firstNotification = false;
+      runtime.setPreference('dark');
+    }
+  });
+
+  runtime.subscribe(listener);
+
+  expect(snapshots).toEqual(['light', 'dark']);
+  expect(listener).toHaveBeenCalledTimes(2);
+});
