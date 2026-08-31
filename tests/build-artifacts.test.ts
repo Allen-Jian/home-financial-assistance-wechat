@@ -6,14 +6,18 @@ function normalize(value: string): string {
   return value.replace(/\r\n/g, '\n').trim();
 }
 
-function transpile(source: string): string {
+function projectCompilerOptions(): ts.CompilerOptions {
+  const configPath = resolve(__dirname, '../tsconfig.miniprogram.json');
+  const readResult = ts.readConfigFile(configPath, ts.sys.readFile);
+  if (readResult.error) throw new Error(ts.flattenDiagnosticMessageText(readResult.error.messageText, '\n'));
+  const parsed = ts.parseJsonConfigFileContent(readResult.config, ts.sys, resolve(__dirname, '..'));
+  if (parsed.errors.length) throw new Error(ts.flattenDiagnosticMessageText(parsed.errors[0].messageText, '\n'));
+  return parsed.options;
+}
+
+function transpile(source: string, compilerOptions: ts.CompilerOptions): string {
   return ts.transpileModule(source, {
-    compilerOptions: {
-      target: ts.ScriptTarget.ES2019,
-      module: ts.ModuleKind.CommonJS,
-      sourceMap: false,
-      declaration: false,
-    },
+    compilerOptions,
   }).outputText;
 }
 
@@ -28,13 +32,23 @@ test('wechat build emits app and every configured page as javascript', () => {
 test('wechat build keeps every themed page and wrapper JS artifact in sync with TS', () => {
   const app = require('../app.json') as { pages: string[] };
   const sources = [...app.pages.map((page) => `${page}`), 'src/shared/themed-page'];
+  const compilerOptions = projectCompilerOptions();
 
   for (const source of sources) {
     const tsPath = resolve(__dirname, `../${source}.ts`);
     const jsPath = resolve(__dirname, `../${source}.js`);
     expect(existsSync(jsPath)).toBe(true);
-    expect(normalize(readFileSync(jsPath, 'utf8'))).toBe(normalize(transpile(readFileSync(tsPath, 'utf8'))));
+    expect(normalize(readFileSync(jsPath, 'utf8'))).toBe(normalize(transpile(readFileSync(tsPath, 'utf8'), compilerOptions)));
   }
+});
+
+test('artifact transpilation honors the project default-import interop option', () => {
+  const compilerOptions = projectCompilerOptions();
+  const fixture = "import value from 'fixture'; export const result = value;";
+  const emitted = transpile(fixture, compilerOptions);
+
+  expect(compilerOptions.esModuleInterop).toBe(true);
+  expect(emitted).toMatch(/__importDefault/);
 });
 
 test('wechat build includes javascript for every registered custom component', () => {
