@@ -43,3 +43,35 @@ git diff --check
 
 - 当前工作树在 Task 3 开始前已有设置页 Sunlit UI 样式和设置测试改动；本任务保留这些改动，未清理或回退。
 - 本地测试、类型检查和构建不替代微信开发者工具/真机对主题切换、原生区域和持久化的验收。
+
+## Fix round 1
+
+### RED
+
+新增回归覆盖：
+
+- 深色偏好下，`dataset.value` 为 `sepia` 或缺失时，主题、存储值和 `setData` 均保持不变。
+- 读取生产 `pages/more/index.wxml`，约束外观选择器为内联固定顺序数据循环，绑定 `onAppearanceSelect`、每项 `data-value`、当前 `themePreference` 选中类和错误提示。
+- 通过 `withThemePage` 包装真实设置页，验证已存储的深色偏好进入页面初始状态。
+
+命令：
+
+```powershell
+npm test -- tests/settings-pages.test.ts -t "appearance|production more page|markup"
+```
+
+结果：失败（预期）。两条非法值测试确认旧处理器将深色改为 `system` 并产生副作用；其余结构与包装回归通过。
+
+### GREEN
+
+`onAppearanceSelect` 现在只接受精确的 `light`、`dark`、`system`，其他值立即返回，不调用 `ThemeRuntime.setPreference()`，因此不会覆盖存储或调用 `setData`。
+
+验证结果：
+
+- 定向 Task 3/主题：2 suites / 26 tests 通过。
+- 全量 Jest：28 suites / 139 tests 通过。
+- `npm run typecheck`：通过。
+- `npm run build:wechat`：通过。
+- `git diff --check`：通过。
+
+修复提交：待提交。

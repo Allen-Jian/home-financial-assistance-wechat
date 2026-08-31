@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { CategorySettingsModel } from '../pages/settings/categories/index';
 import { AssetSettingsModel } from '../pages/settings/assets/index';
 import { TermDepositSettingsModel } from '../pages/settings/term-deposits/index';
 import { createMorePage, MorePageModel } from '../pages/more/index';
-import { ThemeRuntime, type ThemeNative } from '../src/shared/theme-runtime';
+import { THEME_STORAGE_KEY, ThemeRuntime, type ThemeNative } from '../src/shared/theme-runtime';
 import type { StorageLike } from '../src/auth/session-store';
+import { withThemePage } from '../src/shared/themed-page';
 
 class MemoryStorage implements StorageLike {
   readonly values = new Map<string, string>();
@@ -141,4 +144,48 @@ test('appearance persistence failure keeps the session theme and shows a non-blo
   expect(setData).toHaveBeenCalledWith(expect.objectContaining({
     themePersistenceWarning: '外观设置未能保存，下次打开可能恢复为跟随系统',
   }));
+});
+
+test.each([
+  ['bogus value', { currentTarget: { dataset: { value: 'sepia' } } }],
+  ['missing value', { currentTarget: { dataset: {} } }],
+])('invalid appearance dataset %s has no side effects', (_caseName, event) => {
+  const storage = new MemoryStorage();
+  const theme = createTheme(storage);
+  theme.setPreference('dark');
+  const persistedBefore = storage.values.get(THEME_STORAGE_KEY);
+  const page = createMoreAppearancePage(new MorePageModel(moreApi), theme);
+  const setData = jest.fn();
+
+  expect(() => page.onAppearanceSelect.call({ setData }, event)).not.toThrow();
+
+  expect(theme.getSnapshot()).toEqual(expect.objectContaining({ themePreference: 'dark', resolvedTheme: 'dark' }));
+  expect(storage.values.get(THEME_STORAGE_KEY)).toBe(persistedBefore);
+  expect(setData).not.toHaveBeenCalled();
+});
+
+test('production more page keeps stored initial appearance after theme wrapping', () => {
+  const storage = new MemoryStorage();
+  storage.values.set(THEME_STORAGE_KEY, JSON.stringify('dark'));
+  const theme = createTheme(storage);
+  const page = createMoreAppearancePage(new MorePageModel(moreApi), theme);
+  const wrapped = withThemePage(page, theme);
+
+  expect(wrapped.data).toEqual(expect.objectContaining({ themePreference: 'dark', resolvedTheme: 'dark' }));
+});
+
+test('appearance selector markup stays inline and binds each option to the current theme', () => {
+  const wxml = readFileSync(resolve(__dirname, '../pages/more/index.wxml'), 'utf8');
+  const start = wxml.indexOf('class="settings-row static appearance-row"');
+  const end = wxml.indexOf('<navigator url="/pages/reports/index"', start);
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+  const appearanceSection = wxml.slice(start, end);
+
+  expect(appearanceSection).toContain('wx:for="{{appearanceOptions}}"');
+  expect(appearanceSection).toContain('bindtap="onAppearanceSelect"');
+  expect(appearanceSection).toContain('data-value="{{item.value}}"');
+  expect(appearanceSection).toContain("themePreference === item.value ? 'selected' : ''");
+  expect(appearanceSection).toContain('themePersistenceWarning');
+  expect(appearanceSection).not.toContain('<navigator');
 });

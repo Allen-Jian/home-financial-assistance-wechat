@@ -28,7 +28,10 @@ function createMorePage(model, theme) {
         async logout() { await model.logout(); wx.reLaunch({ url: '/pages/login/index' }); this.setData(model.state); },
         onAppearanceSelect(event) {
             var _a, _b;
-            const result = (theme !== null && theme !== void 0 ? theme : (0, app_1.getRuntime)().theme).setPreference((_b = (_a = event.currentTarget) === null || _a === void 0 ? void 0 : _a.dataset) === null || _b === void 0 ? void 0 : _b.value);
+            const value = (_b = (_a = event.currentTarget) === null || _a === void 0 ? void 0 : _a.dataset) === null || _b === void 0 ? void 0 : _b.value;
+            if (value !== 'light' && value !== 'dark' && value !== 'system')
+                return;
+            const result = (theme !== null && theme !== void 0 ? theme : (0, app_1.getRuntime)().theme).setPreference(value);
             this.setData({ ...result.snapshot, themePersistenceWarning: result.persisted ? '' : exports.THEME_SAVE_WARNING });
         },
     };

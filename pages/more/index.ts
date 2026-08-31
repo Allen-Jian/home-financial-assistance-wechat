@@ -30,7 +30,9 @@ export function createMorePage(model: MorePageModel, theme?: MoreThemePort) {
     async exportCsv(this: PageContext) { await model.export(currentPeriod(), 'csv'); this.setData(model.state); },
     async logout(this: PageContext) { await model.logout(); wx.reLaunch({ url: '/pages/login/index' }); this.setData(model.state); },
     onAppearanceSelect(this: PageContext, event: AppearanceEvent) {
-      const result = (theme ?? getRuntime().theme).setPreference(event.currentTarget?.dataset?.value as ThemePreference);
+      const value = event.currentTarget?.dataset?.value;
+      if (value !== 'light' && value !== 'dark' && value !== 'system') return;
+      const result = (theme ?? getRuntime().theme).setPreference(value);
       this.setData({ ...result.snapshot, themePersistenceWarning: result.persisted ? '' : THEME_SAVE_WARNING });
     },
   };
