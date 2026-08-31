@@ -31,6 +31,7 @@ if (typeof App !== 'undefined' && typeof wx !== 'undefined') {
     App({
         globalData: {
             runtime,
+            theme: runtime.theme,
             session: runtime.sessions.read(),
         },
     });

@@ -24,4 +24,9 @@ test('creates a production runtime with real WeChat authentication enabled', () 
   expect(runtime.storage).toBeDefined();
   expect(runtime.api).toBeDefined();
   expect(runtime.auth).toBeDefined();
+  expect(runtime.theme).toBeDefined();
+  expect(runtime.theme.getSnapshot()).toMatchObject({
+    preference: 'system',
+    resolvedTheme: 'light',
+  });
 });

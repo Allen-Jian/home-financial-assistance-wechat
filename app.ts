@@ -7,6 +7,7 @@ import { createAppRuntime, createWxStorage, type AppRuntime } from './src/runtim
 export interface AppInstance {
   globalData: {
     runtime: AppRuntime;
+    theme: AppRuntime['theme'];
     session: Session | null;
   };
 }
@@ -39,6 +40,7 @@ if (typeof App !== 'undefined' && typeof wx !== 'undefined') {
   App({
     globalData: {
       runtime,
+      theme: runtime.theme,
       session: runtime.sessions.read(),
     },
   });

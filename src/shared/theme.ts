@@ -2,6 +2,7 @@ export interface ThemeTokens {
   primary: string;
   primaryStrong: string;
   gradientSecondary: string;
+  accent: string;
   background: string;
   surface: string;
   elevated: string;
@@ -18,48 +19,56 @@ export interface ThemeTokens {
   onPrimary: string;
   onPrimaryMuted: string;
   shadowPrimary: string;
+  focus: string;
+  successSurface: string;
 }
 
 export const LIGHT_TOKENS: ThemeTokens = {
-  primary: '#155EEF',
-  primaryStrong: '#0B4ACB',
-  gradientSecondary: '#4A9BFF',
-  background: '#F3F7FF',
+  primary: '#2F6F64',
+  primaryStrong: '#255A51',
+  gradientSecondary: '#4B8B7F',
+  accent: '#FF9671',
+  background: '#FBF7F0',
   surface: '#FFFFFF',
-  elevated: '#FFFFFF',
-  tint: '#E3EDFF',
-  text: '#17263F',
-  textSecondary: '#334E7A',
-  muted: '#6B7E9E',
-  line: '#D9E5FA',
-  income: '#138A72',
-  expense: '#F15B6C',
-  warning: '#B56B00',
-  warningSurface: '#FFF4D6',
-  expenseSurface: '#FFF1F2',
+  elevated: '#FEFDFB',
+  tint: '#EAF4F1',
+  text: '#24312D',
+  textSecondary: '#44524D',
+  muted: '#66736E',
+  line: '#E5DDD3',
+  income: '#1B7D68',
+  expense: '#D5534C',
+  warning: '#A8492C',
+  warningSurface: '#FFF0E9',
+  expenseSurface: '#FDECEA',
   onPrimary: '#FFFFFF',
-  onPrimaryMuted: '#DCE9FF',
-  shadowPrimary: 'rgba(21, 94, 239, .20)',
+  onPrimaryMuted: '#D6EEE7',
+  shadowPrimary: 'rgba(47, 111, 100, .16)',
+  focus: '#2F6F64',
+  successSurface: '#EAF4F1',
 };
 
 export const DARK_TOKENS: ThemeTokens = {
-  primary: '#5B9CFF',
-  primaryStrong: '#8AB8FF',
-  gradientSecondary: '#2F74F3',
-  background: '#0B1220',
-  surface: '#121C2E',
-  elevated: '#18263D',
-  tint: '#182E55',
-  text: '#F3F7FF',
-  textSecondary: '#C2D2EE',
-  muted: '#9BACCA',
-  line: '#263958',
-  income: '#4AD6B6',
-  expense: '#FF7182',
-  warning: '#FFB020',
-  warningSurface: '#3A2B12',
-  expenseSurface: '#3A1E2A',
-  onPrimary: '#0B1220',
-  onPrimaryMuted: '#DCE9FF',
-  shadowPrimary: 'rgba(91, 156, 255, .28)',
+  primary: '#74C6B2',
+  primaryStrong: '#9AD8C8',
+  gradientSecondary: '#4B8B7F',
+  accent: '#FF9F7D',
+  background: '#101714',
+  surface: '#18221F',
+  elevated: '#1D2925',
+  tint: '#203C35',
+  text: '#F7F4EF',
+  textSecondary: '#D5DDD9',
+  muted: '#A5B2AD',
+  line: '#30433D',
+  income: '#7BD4BD',
+  expense: '#FF9389',
+  warning: '#FFBA8E',
+  warningSurface: '#45291F',
+  expenseSurface: '#432423',
+  onPrimary: '#10231E',
+  onPrimaryMuted: '#D6EEE7',
+  shadowPrimary: 'rgba(0, 0, 0, .28)',
+  focus: '#74C6B2',
+  successSurface: '#203C35',
 };
