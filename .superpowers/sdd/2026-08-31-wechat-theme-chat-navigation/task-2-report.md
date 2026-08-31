@@ -50,3 +50,23 @@ Status: DONE_WITH_CONCERNS
 ### Fix-round commit
 
 - `9e8fbc3 test: harden themed page artifact coverage`
+
+## Fix round 2 — Sol re-review findings
+
+### RED evidence
+
+- Temporarily replaced `projectCompilerOptions()` with the former hardcoded ES2019/CommonJS subset. `npm test -- tests/build-artifacts.test.ts -t "default-import"` failed because `esModuleInterop` was missing and the default-import fixture did not match the project expectation.
+- The AST registration and root-class negative fixtures remain enforced: comments/string literals and nested-only/data-attribute bindings are rejected rather than counted as valid registrations.
+- The compiler-option mutation was immediately restored.
+
+### GREEN evidence
+
+- `npm test -- tests/themed-pages.test.ts tests/build-artifacts.test.ts` — 13 tests passed.
+- `npm test -- --runInBand` — 28 suites, 131 tests passed.
+- `npm run typecheck` — passed.
+- `npm run build:wechat` — passed.
+- `git diff --check` — passed; only existing LF/CRLF conversion warnings were emitted.
+
+### Fix-round commit
+
+- `d826ddc test: use project config for theme artifact checks`
