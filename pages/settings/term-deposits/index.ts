@@ -1,5 +1,7 @@
 import type { TermDepositSummary } from '../../../src/api/contracts';
 import { getRuntime } from '../../../app';
+import { formatNzdMinor } from '../../../src/domain/money';
+import { withThemePage } from '../../../src/shared/themed-page';
 
 export interface TermDepositInput extends Record<string, unknown> {
   name: string;
@@ -17,10 +19,15 @@ export interface TermDepositSettingsApiPort {
 }
 
 export interface TermDepositSettingsState {
-  deposits: TermDepositSummary[];
+  deposits: Array<TermDepositSummary & { principalDisplay?: string; statusLabel?: string }>;
   draft: TermDepositInput;
   loading: boolean;
   error: string;
+}
+
+function depositDisplay(deposit: TermDepositSummary): TermDepositSummary & { principalDisplay: string; statusLabel: string } {
+  const statusLabel = deposit.status === 'closed' ? '已关闭' : deposit.status === 'matured' ? '已到期' : '存续中';
+  return { ...deposit, principalDisplay: formatNzdMinor(deposit.principalMinor), statusLabel };
 }
 
 export class TermDepositSettingsModel {
@@ -34,7 +41,7 @@ export class TermDepositSettingsModel {
     if (!this.api.fetchTermDeposits) return;
     this.state.loading = true;
     this.state.error = '';
-    try { this.state.deposits = await this.api.fetchTermDeposits(); }
+    try { this.state.deposits = (await this.api.fetchTermDeposits()).map(depositDisplay); }
     catch (error) { this.state.error = error instanceof Error ? error.message : '加载定存失败'; }
     finally { this.state.loading = false; }
   }
@@ -44,7 +51,7 @@ export class TermDepositSettingsModel {
       this.state.error = '定存信息无效';
       return false;
     }
-    try { this.state.deposits.push(await this.api.createTermDeposit(input)); return true; }
+    try { this.state.deposits.push(depositDisplay(await this.api.createTermDeposit(input))); return true; }
     catch (error) { this.state.error = error instanceof Error ? error.message : '创建定存失败'; return false; }
   }
 
@@ -55,7 +62,7 @@ export class TermDepositSettingsModel {
     try {
       const updated = await this.api.closeTermDeposit(id, expectedVersion);
       const index = this.state.deposits.findIndex((deposit) => deposit.id === id);
-      if (index >= 0) this.state.deposits[index] = { ...this.state.deposits[index], ...updated };
+      if (index >= 0) this.state.deposits[index] = depositDisplay({ ...this.state.deposits[index], ...updated });
       return true;
     } catch (error) { this.state.error = error instanceof Error ? error.message : '关闭定存失败'; return false; }
   }
@@ -89,5 +96,5 @@ declare function Page(options: Record<string, unknown>): void;
 declare function getApp<T>(): T;
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  Page(createTermDepositSettingsPage(new TermDepositSettingsModel(runtime.api)));
+  Page(withThemePage(createTermDepositSettingsPage(new TermDepositSettingsModel(runtime.api)), runtime.theme));
 }

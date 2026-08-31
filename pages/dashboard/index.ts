@@ -1,9 +1,10 @@
-import type { AccountSummary, AiInsight, CategorySummary, DashboardSummary } from '../../src/api/contracts';
+import type { AccountSummary, AiInsight, CategorySummary, DashboardSummary, TransactionSummary } from '../../src/api/contracts';
 import { ApiError } from '../../src/api/client';
 import { ReadCache } from '../../src/cache/read-cache';
 import { getRuntime } from '../../app';
 import { getPeriodBounds } from '../../src/domain/period';
 import { formatNzdMinor } from '../../src/domain/money';
+import { withThemePage } from '../../src/shared/themed-page';
 
 declare const wx: {
   navigateTo(options: { url: string }): void;
@@ -11,6 +12,11 @@ declare const wx: {
 };
 
 export interface PeriodQuery { from: string; to: string }
+export interface DashboardRecentTransaction extends TransactionSummary {
+  amountDisplay: string;
+  dateDisplay: string;
+  directionLabel: string;
+}
 export interface DashboardApiPort {
   fetchSummary(period: PeriodQuery): Promise<DashboardSummary>;
   fetchAccounts(): Promise<AccountSummary[]>;
@@ -27,7 +33,7 @@ export interface DashboardState {
   pendingDraftCount: number;
   duplicateCount: number;
   recurringDueCount: number;
-  recentTransactions: DashboardSummary['recentTransactions'];
+  recentTransactions: DashboardRecentTransaction[];
   fromCache: boolean;
   cacheLabel: string;
   netWorthDisplay: string;
@@ -43,6 +49,21 @@ export interface DashboardState {
 interface PageContext { setData(data: unknown): void }
 
 const CACHE_TTL = 5 * 60_000;
+
+function recentTransaction(transaction: TransactionSummary): DashboardRecentTransaction {
+  const amount = formatNzdMinor(transaction.amountMinor);
+  const expense = transaction.direction === 'expense';
+  const date = new Date(transaction.occurredAt);
+  const dateDisplay = Number.isNaN(date.valueOf()) ? transaction.occurredAt : new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Pacific/Auckland', month: 'numeric', day: 'numeric',
+  }).format(date);
+  return {
+    ...transaction,
+    amountDisplay: `${expense ? '−' : '+'} ${amount}`,
+    dateDisplay,
+    directionLabel: expense ? '支出' : transaction.direction === 'income' ? '收入' : '调整',
+  };
+}
 
 export class DashboardPageModel {
   private requestGeneration = 0;
@@ -111,7 +132,7 @@ export class DashboardPageModel {
     this.state.pendingDraftCount = summary.pendingDraftCount ?? 0;
     this.state.duplicateCount = summary.duplicateCount ?? 0;
     this.state.recurringDueCount = summary.recurringDueCount ?? 0;
-    this.state.recentTransactions = summary.recentTransactions ?? [];
+    this.state.recentTransactions = (summary.recentTransactions ?? []).slice(0, 3).map(recentTransaction);
     this.state.netWorthDisplay = formatNzdMinor(summary.netWorthMinor);
     this.state.totalAssetsDisplay = formatNzdMinor(summary.totalAssetsMinor ?? summary.netWorthMinor);
     this.state.initialAssetsDisplay = formatNzdMinor(summary.initialAssetsMinor ?? 0);
@@ -158,7 +179,10 @@ export function createDashboardPage(
       this.setData(model.state);
     },
     onQuickEntry() { wx.navigateTo({ url: '/pages/entry/index' }); },
+    onPhotoEntry() { wx.navigateTo({ url: '/pages/entry/photo/index' }); },
+    onManualEntry() { wx.navigateTo({ url: '/pages/ledger/edit/index' }); },
     onOpenLedger() { wx.switchTab({ url: '/pages/ledger/index' }); },
+    onOpenAi() { wx.switchTab({ url: '/pages/ai/index' }); },
   };
 }
 
@@ -166,5 +190,5 @@ declare function Page(options: Record<string, unknown>): void;
 declare function getApp<T>(): T;
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  Page(createDashboardPage(new DashboardPageModel(runtime.api as unknown as DashboardApiPort, runtime.cache, () => runtime.sessions.read()?.householdId ?? 'anonymous')));
+  Page(withThemePage(createDashboardPage(new DashboardPageModel(runtime.api as unknown as DashboardApiPort, runtime.cache, () => runtime.sessions.read()?.householdId ?? 'anonymous')), runtime.theme));
 }

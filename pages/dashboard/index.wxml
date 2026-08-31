@@ -1,15 +1,36 @@
-<view class="page dashboard-page">
-  <view class="topline"><view><text class="eyebrow">家庭驾驶舱</text><text class="heading">{{summary ? '今天也记得看一眼' : '正在准备你的账本'}}</text></view><text wx:if="{{cacheLabel}}" class="cache-label">{{cacheLabel}}</text></view>
-  <view class="net-worth-card"><text class="card-label">当前净资产</text><text class="net-worth">{{netWorthDisplay}}</text><text class="card-foot">资产减去负债</text></view>
-  <view class="asset-summary"><view><text class="asset-label">总资产</text><text class="asset-value">{{totalAssetsDisplay}}</text></view><view><text class="asset-label">初始资产</text><text class="asset-value">{{initialAssetsDisplay}}</text></view><view><text class="asset-label">定期存款</text><text class="asset-value">{{termDepositDisplay}}</text></view></view>
-  <view class="metric-grid"><view class="metric income"><text>本期收入</text><text>{{incomeDisplay}}</text></view><view class="metric expense"><text>本期支出</text><text>{{expenseDisplay}}</text></view></view>
-  <view class="section-title"><text>待处理</text><text class="muted">人工确认后才会入账</text></view>
-  <view class="todo-row"><text>待确认草稿</text><text class="count">{{pendingDraftCount}}</text></view>
-  <view class="todo-row"><text>重复候选</text><text class="count">{{duplicateCount}}</text></view>
-  <view class="todo-row"><text>周期账单提醒</text><text class="count">{{recurringDueCount}}</text></view>
-  <view wx:if="{{insights.length}}" class="section-title"><text>本月关注</text><text class="muted">只读分析</text></view>
-  <view wx:if="{{insights.length}}" class="insight-list"><block wx:for="{{insights}}" wx:key="title"><view class="insight-card"><text class="insight-title">{{item.title}}</text><text wx:if="{{item.detail}}" class="insight-detail">{{item.detail}}</text></view></block></view>
-  <view class="section-title"><text>最近账目</text><view bindtap="onOpenLedger" class="link">查看全部</view></view>
-  <view wx:if="{{recentTransactions.length === 0}}" class="empty">还没有最近账目，先记下第一笔吧</view>
-  <button class="floating-add" bindtap="onQuickEntry">＋</button>
+<page-meta page-style="{{themePageStyle}}" />
+<view class="page dashboard-page {{themeClass}}">
+  <view class="home-header">
+    <view><text class="home-kicker">家庭账本</text><text class="home-title">今天好，欢迎回家</text></view>
+    <text wx:if="{{cacheLabel}}" class="cache-label">{{cacheLabel}}</text>
+  </view>
+  <view class="balance-card">
+    <view class="balance-head"><text>家庭总资产</text><text>刚刚更新</text></view>
+    <text class="balance-value money-number">{{totalAssetsDisplay}}</text>
+    <view class="balance-foot"><text>初始资产 {{initialAssetsDisplay}}</text><text>定期存款 {{termDepositDisplay}}</text></view>
+  </view>
+  <view class="metric-grid">
+    <view class="metric-card"><text class="metric-label">↙ 本月收入</text><text class="metric-value income money-number">+ {{incomeDisplay}}</text></view>
+    <view class="metric-card"><text class="metric-label">↗ 本月支出</text><text class="metric-value expense money-number">− {{expenseDisplay}}</text></view>
+  </view>
+  <view class="home-section">
+    <view class="section-head"><text class="section-title">快速记账</text><text class="section-note">先生成草稿，再确认</text></view>
+    <view class="quick-grid">
+      <button class="quick-action photo-action" bindtap="onPhotoEntry"><view class="line-icon camera-icon"></view><view><text>拍照记账</text><text>AI 帮你识别</text></view></button>
+      <button class="quick-action manual-action" bindtap="onManualEntry"><view class="line-icon pencil-icon"></view><view><text>手动记账</text><text>快速填写一笔</text></view></button>
+    </view>
+  </view>
+  <view class="home-section">
+    <view class="section-head"><text class="section-title">最近收支</text><button class="text-button" bindtap="onOpenLedger">查看全部</button></view>
+    <view wx:if="{{recentTransactions.length}}" class="transaction-list">
+      <view wx:for="{{recentTransactions}}" wx:key="id" class="transaction-row">
+        <text class="category-mark {{item.direction}}">{{item.direction === 'income' ? '收' : '支'}}</text>
+        <view class="transaction-main"><text class="transaction-title">{{item.merchant || item.note || '未命名账目'}}</text><text class="transaction-meta">{{item.directionLabel}} · {{item.dateDisplay}}</text></view>
+        <text class="transaction-amount {{item.direction}} money-number">{{item.amountDisplay}}</text>
+      </view>
+    </view>
+    <view wx:else class="empty-state"><view class="empty-receipt"></view><text class="empty-title">还没有最近收支</text><text class="empty-copy">从一笔早餐、通勤或收入开始，让账本慢慢有节奏。</text><button class="primary-button" bindtap="onManualEntry">记第一笔</button></view>
+  </view>
+  <button wx:if="{{insights.length}}" class="insight-strip" bindtap="onOpenAi"><text class="spark-mark">✦</text><view><text>本月关注</text><text>{{insights[0].detail || insights[0].title}}</text></view><text class="chevron">›</text></button>
+  <button class="floating-add" bindtap="onQuickEntry" aria-label="打开记账方式">＋</button>
 </view>

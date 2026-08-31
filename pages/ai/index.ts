@@ -3,6 +3,8 @@ import { ApiError } from '../../src/api/client';
 import type { StorageLike } from '../../src/auth/session-store';
 import { AI_CHAT_STORAGE_KEY, copy } from '../../src/shared/copy';
 import { getRuntime } from '../../app';
+import { formatNzdMinor } from '../../src/domain/money';
+import { withThemePage } from '../../src/shared/themed-page';
 
 export const QUICK_QUESTIONS = ['本月花最多的分类？', '找出异常支出', '比较本季与上季'] as const;
 export interface AiApiPort {
@@ -14,7 +16,7 @@ export interface AiMessage {
   role: 'user' | 'assistant';
   content: string;
   scope?: { from: string; to: string };
-  citations?: AiCitation[];
+  citations?: Array<AiCitation & { amountDisplay: string }>;
   insights?: AiInsight[];
 }
 export interface AiPageState {
@@ -24,6 +26,11 @@ export interface AiPageState {
   error: string;
   notice: string;
   conversationId: string;
+  draft: string;
+}
+
+function citationDisplay(citation: AiCitation): AiCitation & { amountDisplay: string } {
+  return { ...citation, amountDisplay: formatNzdMinor(citation.amountMinor) };
 }
 
 function isMessage(value: unknown): value is AiMessage {
@@ -41,7 +48,7 @@ export class AiPageModel {
     private readonly navigate: (route: string) => void,
     private readonly storage: StorageLike,
   ) {
-    this.state = { quickQuestions: QUICK_QUESTIONS, messages: this.readHistory(), loading: false, error: '', notice: copy.aiReadOnlyNotice, conversationId: '' };
+    this.state = { quickQuestions: QUICK_QUESTIONS, messages: this.readHistory(), loading: false, error: '', notice: copy.aiReadOnlyNotice, conversationId: '', draft: '' };
   }
 
   async hydrate(): Promise<void> {
@@ -57,7 +64,7 @@ export class AiPageModel {
           role: message.role,
           content: typeof content.answer === 'string' ? content.answer : typeof content.text === 'string' ? content.text : '',
           scope: content.scope as { from: string; to: string } | undefined,
-          citations: Array.isArray(content.citations) ? content.citations as AiCitation[] : undefined,
+          citations: Array.isArray(content.citations) ? (content.citations as AiCitation[]).map(citationDisplay) : undefined,
           insights: Array.isArray(content.insights) ? content.insights as AiInsight[] : undefined,
         };
       }).filter((message) => message.content);
@@ -76,7 +83,7 @@ export class AiPageModel {
     try {
       const result = await this.api.askAi({ conversationId: this.state.conversationId || undefined, message: value });
       this.state.conversationId = result.conversationId || this.state.conversationId;
-      this.state.messages.push({ role: 'assistant', content: result.answer, scope: result.scope, citations: result.citations ?? [], insights: result.insights ?? [] });
+      this.state.messages.push({ role: 'assistant', content: result.answer, scope: result.scope, citations: (result.citations ?? []).map(citationDisplay), insights: result.insights ?? [] });
       this.persist();
       return true;
     } catch (error) {
@@ -94,6 +101,14 @@ export class AiPageModel {
     } finally { this.state.loading = false; }
   }
 
+  setDraft(value: string): void { this.state.draft = value; }
+
+  async sendCurrent(): Promise<boolean> {
+    const sent = await this.send(this.state.draft);
+    if (sent) this.state.draft = '';
+    return sent;
+  }
+
   deleteHistory(): Promise<boolean> {
     const conversationId = this.state.conversationId;
     this.state.messages = [];
@@ -108,7 +123,10 @@ export class AiPageModel {
     if (typeof raw !== 'string') return [];
     try {
       const value = JSON.parse(raw) as unknown;
-      return Array.isArray(value) ? value.filter(isMessage) : [];
+      return Array.isArray(value) ? value.filter(isMessage).map((message) => ({
+        ...message,
+        citations: message.citations?.map((citation) => ({ ...citation, amountDisplay: citation.amountDisplay ?? formatNzdMinor(citation.amountMinor) })),
+      })) : [];
     } catch { return []; }
   }
 
@@ -137,6 +155,8 @@ export function createAiPage(model: AiPageModel) {
     data: model.state,
     async onShow(this: PageContext) { await model.hydrate(); this.setData(model.state); },
     async send(this: PageContext, event: { detail?: { value?: string } }) { await model.send(event.detail?.value ?? ''); this.setData(model.state); },
+    onInput(this: PageContext, event: { detail?: { value?: string } }) { model.setDraft(event.detail?.value ?? ''); this.setData(model.state); },
+    async sendCurrent(this: PageContext) { await model.sendCurrent(); this.setData(model.state); },
     async quickQuestion(this: PageContext, event: { currentTarget?: { dataset?: { question?: string } } }) { await model.send(event.currentTarget?.dataset?.question ?? ''); this.setData(model.state); },
     async deleteHistory(this: PageContext) { await model.deleteHistory(); this.setData(model.state); },
   };
@@ -147,5 +167,5 @@ declare function getApp<T>(): unknown;
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
   const model = new AiPageModel(runtime.api, createOnlineStatus(), (route) => wx.reLaunch({ url: route }), runtime.storage);
-  Page(createAiPage(model));
+  Page(withThemePage(createAiPage(model), runtime.theme));
 }

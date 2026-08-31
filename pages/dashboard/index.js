@@ -6,7 +6,22 @@ const client_1 = require("../../src/api/client");
 const app_1 = require("../../app");
 const period_1 = require("../../src/domain/period");
 const money_1 = require("../../src/domain/money");
+const themed_page_1 = require("../../src/shared/themed-page");
 const CACHE_TTL = 5 * 60000;
+function recentTransaction(transaction) {
+    const amount = (0, money_1.formatNzdMinor)(transaction.amountMinor);
+    const expense = transaction.direction === 'expense';
+    const date = new Date(transaction.occurredAt);
+    const dateDisplay = Number.isNaN(date.valueOf()) ? transaction.occurredAt : new Intl.DateTimeFormat('zh-CN', {
+        timeZone: 'Pacific/Auckland', month: 'numeric', day: 'numeric',
+    }).format(date);
+    return {
+        ...transaction,
+        amountDisplay: `${expense ? '−' : '+'} ${amount}`,
+        dateDisplay,
+        directionLabel: expense ? '支出' : transaction.direction === 'income' ? '收入' : '调整',
+    };
+}
 class DashboardPageModel {
     constructor(api, cache, householdId = () => 'anonymous') {
         this.api = api;
@@ -101,7 +116,7 @@ class DashboardPageModel {
         this.state.pendingDraftCount = (_a = summary.pendingDraftCount) !== null && _a !== void 0 ? _a : 0;
         this.state.duplicateCount = (_b = summary.duplicateCount) !== null && _b !== void 0 ? _b : 0;
         this.state.recurringDueCount = (_c = summary.recurringDueCount) !== null && _c !== void 0 ? _c : 0;
-        this.state.recentTransactions = (_d = summary.recentTransactions) !== null && _d !== void 0 ? _d : [];
+        this.state.recentTransactions = ((_d = summary.recentTransactions) !== null && _d !== void 0 ? _d : []).slice(0, 3).map(recentTransaction);
         this.state.netWorthDisplay = (0, money_1.formatNzdMinor)(summary.netWorthMinor);
         this.state.totalAssetsDisplay = (0, money_1.formatNzdMinor)((_e = summary.totalAssetsMinor) !== null && _e !== void 0 ? _e : summary.netWorthMinor);
         this.state.initialAssetsDisplay = (0, money_1.formatNzdMinor)((_f = summary.initialAssetsMinor) !== null && _f !== void 0 ? _f : 0);
@@ -144,10 +159,13 @@ function createDashboardPage(model, period = () => {
             this.setData(model.state);
         },
         onQuickEntry() { wx.navigateTo({ url: '/pages/entry/index' }); },
+        onPhotoEntry() { wx.navigateTo({ url: '/pages/entry/photo/index' }); },
+        onManualEntry() { wx.navigateTo({ url: '/pages/ledger/edit/index' }); },
         onOpenLedger() { wx.switchTab({ url: '/pages/ledger/index' }); },
+        onOpenAi() { wx.switchTab({ url: '/pages/ai/index' }); },
     };
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
     const runtime = (0, app_1.getRuntime)();
-    Page(createDashboardPage(new DashboardPageModel(runtime.api, runtime.cache, () => { var _a, _b; return (_b = (_a = runtime.sessions.read()) === null || _a === void 0 ? void 0 : _a.householdId) !== null && _b !== void 0 ? _b : 'anonymous'; })));
+    Page((0, themed_page_1.withThemePage)(createDashboardPage(new DashboardPageModel(runtime.api, runtime.cache, () => { var _a, _b; return (_b = (_a = runtime.sessions.read()) === null || _a === void 0 ? void 0 : _a.householdId) !== null && _b !== void 0 ? _b : 'anonymous'; })), runtime.theme));
 }

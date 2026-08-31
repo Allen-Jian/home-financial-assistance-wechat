@@ -1,11 +1,12 @@
-<view class="page manual-page">
-  <view class="page-title"><text>手动记账</text><text class="sub">收入或支出会记录到家庭账本</text></view>
-  <view class="direction-switch"><button bindtap="onDirectionChange" class="{{direction === 'expense' ? 'active' : ''}}" data-value="expense">支出</button><button bindtap="onDirectionChange" class="{{direction === 'income' ? 'active' : ''}}" data-value="income">收入</button></view>
-  <view class="amount-box"><text class="currency">NZ$</text><input bindinput="onAmountInput" class="amount-input" type="digit" placeholder="0.00" value="{{amount}}" /></view>
-  <view class="field-row"><text>分类</text><picker bindchange="onCategoryChange" mode="selector" range="{{categories}}" range-key="name"><text class="picker-value">{{categoryName || '选择分类'}}</text></picker></view>
-  <view class="field-row"><text>日期</text><picker bindchange="onDateChange" mode="date" value="{{occurredAt}}"><text class="picker-value">{{occurredAt}}</text></picker></view>
-  <textarea bindinput="onNoteInput" class="note" placeholder="备注（可选）" value="{{note}}"></textarea>
-  <text wx:if="{{error}}" class="error">{{error}}</text>
-  <view wx:if="{{duplicateActions.length}}" class="duplicate-actions"><button bindtap="later">稍后处理</button><button class="primary-button" bindtap="keepBoth">保留两笔</button></view>
-  <button bindtap="save" class="primary-button save-button" loading="{{loading}}">保存账目</button>
+<page-meta page-style="{{themePageStyle}}" />
+<view class="page manual-page {{themeClass}}">
+  <view class="entry-appbar"><button class="close-button" bindtap="close" aria-label="关闭记账流程">×</button><text>手动记账</text><view class="appbar-spacer"></view></view>
+  <view class="manual-header"><text>手动记账</text><text>快速填写一笔家庭收支</text></view>
+  <view class="direction-switch"><button bindtap="onDirectionChange" data-value="expense" class="{{direction === 'expense' ? 'active' : ''}}">支出</button><button bindtap="onDirectionChange" data-value="income" class="{{direction === 'income' ? 'active' : ''}}">收入</button></view>
+  <view class="amount-field focus-surface"><text>金额</text><view><text>NZ$</text><input bindinput="onAmountInput" type="digit" placeholder="0.00" value="{{amount}}" /></view></view>
+  <label class="inline-field focus-surface"><text>商户／来源</text><input bindinput="onMerchantInput" value="{{merchant}}" placeholder="例如 PAK'nSAVE" /></label>
+  <view class="category-section"><text class="category-title">分类</text><view class="category-grid"><button wx:for="{{visibleCategories}}" wx:key="id" bindtap="onCategoryTap" data-id="{{item.id}}" class="{{categoryId === item.id ? 'active' : ''}}">{{item.name}}</button></view><text wx:if="{{!loading && visibleCategories.length === 0}}" class="category-empty">暂无可用分类，请先到设置中创建</text></view>
+  <view class="form-group"><picker mode="date" value="{{occurredAt}}" bindchange="onDateChange"><view class="form-row focus-surface"><view><text>日期</text><text>{{occurredAt}}</text></view><text class="chevron">›</text></view></picker><label class="note-field focus-surface"><text>备注（可选）</text><textarea bindinput="onNoteInput" placeholder="补充这笔账目的说明" value="{{note}}"></textarea></label></view>
+  <view class="safety-note"><text>✓</text><text>保存前会检查相同日期和金额的重复记录。</text></view>
+  <text wx:if="{{error}}" class="page-error">{{error}}</text><view wx:if="{{duplicateActions.length}}" class="duplicate-actions"><button class="secondary-button" bindtap="later">稍后处理</button><button class="primary-button" bindtap="keepBoth">保留两笔</button></view><button class="primary-button save-button" bindtap="save" loading="{{loading}}">保存账目</button>
 </view>

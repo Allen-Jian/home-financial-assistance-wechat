@@ -5,11 +5,13 @@ import type { AccountSummary, CategorySummary } from '../../src/api/contracts';
 import type { TransactionSummary } from '../../src/api/contracts';
 import { getRuntime } from '../../app';
 import { getPeriodBounds } from '../../src/domain/period';
+import { withThemePage } from '../../src/shared/themed-page';
 
 export type LedgerPeriodMode = 'month' | 'year' | 'custom';
 export interface LedgerPeriodQuery { from: string; to: string }
 export interface LedgerListItem extends TransactionSummary {
   amountDisplay: string;
+  signedAmountDisplay: string;
   dateDisplay: string;
   directionLabel: string;
 }
@@ -26,6 +28,9 @@ export interface LedgerListState {
   selectedAmountDisplay: string;
   selectedDateDisplay: string;
   selectedDirectionLabel: string;
+  incomeDisplay: string;
+  expenseDisplay: string;
+  netDisplay: string;
   loading: boolean;
   error: string;
 }
@@ -85,7 +90,8 @@ export class LedgerListPageModel {
 
   state: LedgerListState = {
     periodMode: 'month', period: { from: '', to: '' }, customFrom: '', customTo: '',
-    transactions: [], selectedTransaction: null, selectedAmountDisplay: '', selectedDateDisplay: '', selectedDirectionLabel: '', loading: false, error: '',
+    transactions: [], selectedTransaction: null, selectedAmountDisplay: '', selectedDateDisplay: '', selectedDirectionLabel: '',
+    incomeDisplay: '+ NZ$0.00', expenseDisplay: '− NZ$0.00', netDisplay: 'NZ$0.00', loading: false, error: '',
   };
 
   constructor(private readonly api: LedgerListApiPort, private readonly now: () => Date = currentAucklandDate, private readonly cache?: ReadCache, private readonly householdId: () => string = () => 'anonymous') {
@@ -129,9 +135,11 @@ export class LedgerListPageModel {
       this.state.transactions = transactions.map((transaction) => ({
         ...transaction,
         amountDisplay: formatNzdMinor(transaction.amountMinor),
+        signedAmountDisplay: `${transaction.direction === 'expense' ? '−' : '+'} ${formatNzdMinor(transaction.amountMinor)}`,
         dateDisplay: toDisplayDate(transaction.occurredAt),
         directionLabel: directionLabels[transaction.direction],
       }));
+      this.updateTotals(transactions);
       return true;
     } catch (error) {
       if (generation !== this.requestGeneration) return false;
@@ -139,7 +147,10 @@ export class LedgerListPageModel {
       const cached = error instanceof ApiError && (error.code === 'network' || error.code === 'timeout')
         ? this.cache?.read<TransactionSummary[]>(cacheKey, 5 * 60_000)
         : null;
-      if (cached) this.state.transactions = cached.data.map((transaction) => ({ ...transaction, amountDisplay: formatNzdMinor(transaction.amountMinor), dateDisplay: toDisplayDate(transaction.occurredAt), directionLabel: directionLabels[transaction.direction] }));
+      if (cached) {
+        this.state.transactions = cached.data.map((transaction) => ({ ...transaction, amountDisplay: formatNzdMinor(transaction.amountMinor), signedAmountDisplay: `${transaction.direction === 'expense' ? '−' : '+'} ${formatNzdMinor(transaction.amountMinor)}`, dateDisplay: toDisplayDate(transaction.occurredAt), directionLabel: directionLabels[transaction.direction] }));
+        this.updateTotals(cached.data);
+      }
       else this.state.error = error instanceof Error ? error.message : '加载账目失败';
       return false;
     } finally {
@@ -150,7 +161,7 @@ export class LedgerListPageModel {
   selectTransaction(id: string): void {
     const selected = this.state.transactions.find((transaction) => transaction.id === id);
     if (!selected) { this.state.selectedTransaction = null; return; }
-    const { amountDisplay: _amountDisplay, dateDisplay: _dateDisplay, directionLabel: _directionLabel, ...transaction } = selected;
+    const { amountDisplay: _amountDisplay, signedAmountDisplay: _signedAmountDisplay, dateDisplay: _dateDisplay, directionLabel: _directionLabel, ...transaction } = selected;
     this.state.selectedTransaction = transaction;
     this.state.selectedAmountDisplay = selected.amountDisplay;
     this.state.selectedDateDisplay = selected.dateDisplay;
@@ -161,12 +172,23 @@ export class LedgerListPageModel {
   setCustomTo(value: string): void { this.state.customTo = value; }
 
   private cacheKey(period: LedgerPeriodQuery, scope = this.householdId()): string { return `ledger:${scope}:${period.from}:${period.to}`; }
+  private updateTotals(transactions: TransactionSummary[]): void {
+    const income = transactions.filter((item) => item.direction === 'income').reduce((total, item) => total + item.amountMinor, 0);
+    const expense = transactions.filter((item) => item.direction === 'expense').reduce((total, item) => total + item.amountMinor, 0);
+    const net = income - expense;
+    this.state.incomeDisplay = `+ ${formatNzdMinor(income)}`;
+    this.state.expenseDisplay = `− ${formatNzdMinor(expense)}`;
+    this.state.netDisplay = `${net > 0 ? '+ ' : net < 0 ? '− ' : ''}${formatNzdMinor(Math.abs(net))}`;
+  }
   private clearPrivateState(): void {
     this.state.transactions = [];
     this.state.selectedTransaction = null;
     this.state.selectedAmountDisplay = '';
     this.state.selectedDateDisplay = '';
     this.state.selectedDirectionLabel = '';
+    this.state.incomeDisplay = '+ NZ$0.00';
+    this.state.expenseDisplay = '− NZ$0.00';
+    this.state.netDisplay = 'NZ$0.00';
     this.state.error = '';
   }
 
@@ -372,6 +394,8 @@ export function createLedgerListPage(model: LedgerListPageModel) {
       model.state.selectedDirectionLabel = '';
       this.setData(model.state);
     },
+    openBankImport() { wx.navigateTo({ url: '/pages/imports/index?mode=statement' }); },
+    openManualEntry() { wx.navigateTo({ url: '/pages/ledger/edit/index' }); },
   };
 }
 
@@ -380,5 +404,5 @@ declare function getApp<T>(): T;
 declare const wx: { navigateTo(options: { url: string }): void };
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  Page(createLedgerListPage(new LedgerListPageModel(runtime.api as unknown as LedgerListApiPort, undefined, runtime.cache, () => runtime.sessions.read()?.householdId ?? 'anonymous')));
+  Page(withThemePage(createLedgerListPage(new LedgerListPageModel(runtime.api as unknown as LedgerListApiPort, undefined, runtime.cache, () => runtime.sessions.read()?.householdId ?? 'anonymous')), runtime.theme));
 }

@@ -4,6 +4,7 @@ exports.MorePageModel = void 0;
 exports.createMorePage = createMorePage;
 const app_1 = require("../../app");
 const period_1 = require("../../src/domain/period");
+const themed_page_1 = require("../../src/shared/themed-page");
 class MorePageModel {
     constructor(api) {
         this.api = api;
@@ -27,5 +28,5 @@ function currentPeriod() {
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
     const runtime = (0, app_1.getRuntime)();
-    Page(createMorePage(new MorePageModel(runtime.api)));
+    Page((0, themed_page_1.withThemePage)(createMorePage(new MorePageModel(runtime.api)), runtime.theme));
 }

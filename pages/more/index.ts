@@ -1,6 +1,7 @@
 import type { ReportPeriodQuery } from '../reports/index';
 import { getRuntime } from '../../app';
 import { getPeriodBounds } from '../../src/domain/period';
+import { withThemePage } from '../../src/shared/themed-page';
 
 export interface MoreApiPort { exportTransactions(period: ReportPeriodQuery, format: 'json' | 'csv'): Promise<unknown>; logout(): Promise<void> }
 export class MorePageModel {
@@ -31,5 +32,5 @@ declare const wx: { reLaunch(options: { url: string }): void };
 declare function getApp<T>(): unknown;
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  Page(createMorePage(new MorePageModel(runtime.api as unknown as MoreApiPort)));
+  Page(withThemePage(createMorePage(new MorePageModel(runtime.api as unknown as MoreApiPort)), runtime.theme));
 }

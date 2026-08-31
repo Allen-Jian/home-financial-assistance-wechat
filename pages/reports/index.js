@@ -4,12 +4,14 @@ exports.ReportPageModel = void 0;
 exports.createReportsPage = createReportsPage;
 const period_1 = require("../../src/domain/period");
 const app_1 = require("../../app");
+const money_1 = require("../../src/domain/money");
+const themed_page_1 = require("../../src/shared/themed-page");
 class ReportPageModel {
     constructor(api) {
         this.api = api;
         this.state = {
             periodKind: 'month', period: { from: '', to: '' }, report: null, selectedCategory: '',
-            loading: false, error: '', exported: null,
+            loading: false, error: '', exported: null, incomeDisplay: '', expenseDisplay: '', netDisplay: '', categoryBreakdown: [],
         };
     }
     async load(kind, anchor) {
@@ -21,7 +23,7 @@ class ReportPageModel {
         this.state.loading = true;
         this.state.error = '';
         try {
-            this.state.report = await this.api.fetchReports(period);
+            this.applyReport(await this.api.fetchReports(period));
             return true;
         }
         catch (error) {
@@ -37,7 +39,7 @@ class ReportPageModel {
             return false;
         this.state.selectedCategory = category;
         try {
-            this.state.report = await this.api.fetchReports({ ...this.state.period, category });
+            this.applyReport(await this.api.fetchReports({ ...this.state.period, category }));
             return true;
         }
         catch (error) {
@@ -48,6 +50,14 @@ class ReportPageModel {
     async export(format) {
         this.state.exported = await this.api.exportTransactions(this.state.period, format);
         return this.state.exported;
+    }
+    applyReport(report) {
+        this.state.report = report;
+        this.state.incomeDisplay = (0, money_1.formatNzdMinor)(report.incomeMinor);
+        this.state.expenseDisplay = (0, money_1.formatNzdMinor)(report.expenseMinor);
+        const net = report.incomeMinor - report.expenseMinor;
+        this.state.netDisplay = `${net > 0 ? '+ ' : net < 0 ? '− ' : ''}${(0, money_1.formatNzdMinor)(Math.abs(net))}`;
+        this.state.categoryBreakdown = report.categoryBreakdown.map((row) => ({ label: row.label, amountDisplay: (0, money_1.formatNzdMinor)(row.amountMinor) }));
     }
 }
 exports.ReportPageModel = ReportPageModel;
@@ -73,5 +83,5 @@ function createReportsPage(model) {
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
     const runtime = (0, app_1.getRuntime)();
-    Page(createReportsPage(new ReportPageModel(runtime.api)));
+    Page((0, themed_page_1.withThemePage)(createReportsPage(new ReportPageModel(runtime.api)), runtime.theme));
 }

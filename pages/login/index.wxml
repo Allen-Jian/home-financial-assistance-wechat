@@ -1,12 +1,9 @@
-<view class="page login-page">
-  <view class="brand-mark">家</view>
-  <text class="title">家庭手账</text>
-  <text class="subtitle">把每一笔生活，都放在同一个家里</text>
-  <view class="panel">
-    <input class="input" placeholder="邀请码（可选）" value="{{inviteCode}}" bindinput="onInviteCodeInput" />
-    <input class="input" placeholder="新家庭名称" value="{{householdName}}" bindinput="onHouseholdNameInput" />
-    <button class="primary-button" loading="{{loading}}" bindtap="submit">微信登录</button>
-    <text wx:if="{{error}}" class="error">{{error}}</text>
-  </view>
-  <text class="hint">首次登录且没有邀请码时，会创建“我的家庭”</text>
+<page-meta page-style="{{themePageStyle}}" />
+<view class="page login-page {{themeClass}}">
+  <view class="brand-mark"><text>家</text></view><text class="title">家庭手账</text><text class="subtitle">把每一笔生活，都放在同一个家里</text>
+  <button class="wechat-login" loading="{{loading}}" bindtap="submit"><view class="wechat-mark"><view></view><view></view></view><text>微信快捷登录</text></button>
+  <view class="wechat-options"><label class="input-field focus-surface"><text>家庭名称</text><input placeholder="首次使用时创建家庭" value="{{householdName}}" bindinput="onHouseholdNameInput" /></label><label class="input-field focus-surface"><text>邀请码（可选）</text><input placeholder="加入家人的账本" value="{{inviteCode}}" bindinput="onInviteCodeInput" /></label></view>
+  <view class="divider"><view></view><text>或使用账号登录</text><view></view></view>
+  <view class="account-form"><label class="input-field focus-surface"><text>账号</text><input placeholder="请输入账号" value="{{username}}" bindinput="onUsernameInput" /></label><label class="input-field focus-surface"><text>密码</text><input password placeholder="请输入密码" value="{{password}}" bindinput="onPasswordInput" bindconfirm="submitPassword" confirm-type="done" /></label><button class="primary-button account-login" loading="{{loading}}" bindtap="submitPassword">登录</button></view>
+  <text wx:if="{{error}}" class="page-error login-error">{{error}}</text><text class="privacy-copy">登录即表示你同意家庭账本的隐私说明；财务数据仅对家庭成员可见。</text>
 </view>

@@ -1,65 +1,198 @@
 page {
-  --color-primary: #155EEF;
-  --color-primary-strong: #0B4ACB;
-  --color-gradient-secondary: #4A9BFF;
-  --color-background: #F3F7FF;
+  --color-primary: #2F6F64;
+  --color-primary-strong: #255A51;
+  --color-gradient-secondary: #4B8B7F;
+  --color-accent: #FF9671;
+  --color-accent-surface: #FFF0E9;
+  --color-background: #FBF7F0;
   --color-surface: #FFFFFF;
-  --color-elevated: #FFFFFF;
-  --color-tint: #E3EDFF;
-  --color-text: #17263F;
-  --color-text-secondary: #334E7A;
-  --color-muted: #6B7E9E;
-  --color-line: #D9E5FA;
-  --color-income: #138A72;
-  --color-expense: #F15B6C;
-  --color-warning: #B56B00;
-  --color-warning-surface: #FFF4D6;
-  --color-expense-surface: #FFF1F2;
+  --color-elevated: #FEFDFB;
+  --color-tint: #EAF4F1;
+  --color-text: #24312D;
+  --color-text-secondary: #44524D;
+  --color-muted: #66736E;
+  --color-line: #E5DDD3;
+  --color-border: #E5DDD3;
+  --color-income: #1B7D68;
+  --color-expense: #D5534C;
+  --color-warning: #A8492C;
+  --color-warning-surface: #FFF0E9;
+  --color-expense-surface: #FDECEA;
+  --color-success-surface: #EAF4F1;
+  --color-focus: #2F6F64;
+  --focus-ring: rgba(47, 111, 100, .18);
   --color-on-primary: #FFFFFF;
-  --color-on-primary-muted: #DCE9FF;
-  --shadow-primary: rgba(21, 94, 239, .20);
+  --color-on-primary-muted: #D6EEE7;
+  --shadow-primary: rgba(47, 111, 100, .16);
+  --shadow-card: rgba(52, 65, 60, .08);
   background: var(--color-background);
   color: var(--color-text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 28rpx;
+  line-height: 1.5;
 }
 
 @media (prefers-color-scheme: dark) {
   page {
-    --color-primary: #5B9CFF;
-    --color-primary-strong: #8AB8FF;
-    --color-gradient-secondary: #2F74F3;
-    --color-background: #0B1220;
-    --color-surface: #121C2E;
-    --color-elevated: #18263D;
-    --color-tint: #182E55;
-    --color-text: #F3F7FF;
-    --color-text-secondary: #C2D2EE;
-    --color-muted: #9BACCA;
-    --color-line: #263958;
-    --color-income: #4AD6B6;
-    --color-expense: #FF7182;
-    --color-warning: #FFB020;
-    --color-warning-surface: #3A2B12;
-    --color-expense-surface: #3A1E2A;
-    --color-on-primary: #0B1220;
-    --color-on-primary-muted: #DCE9FF;
-    --shadow-primary: rgba(91, 156, 255, .28);
+    --color-primary: #74C6B2;
+    --color-primary-strong: #9AD8C8;
+    --color-gradient-secondary: #4B8B7F;
+    --color-accent: #FF9F7D;
+    --color-accent-surface: #45291F;
+    --color-background: #101714;
+    --color-surface: #18221F;
+    --color-elevated: #1D2925;
+    --color-tint: #203C35;
+    --color-text: #F7F4EF;
+    --color-text-secondary: #D5DDD9;
+    --color-muted: #A5B2AD;
+    --color-line: #30433D;
+    --color-border: #30433D;
+    --color-income: #7BD4BD;
+    --color-expense: #FF9389;
+    --color-warning: #FFBA8E;
+    --color-warning-surface: #45291F;
+    --color-expense-surface: #432423;
+    --color-success-surface: #203C35;
+    --color-focus: #74C6B2;
+    --focus-ring: rgba(116, 198, 178, .22);
+    --color-on-primary: #10231E;
+    --color-on-primary-muted: #D6EEE7;
+    --shadow-primary: rgba(0, 0, 0, .28);
+    --shadow-card: rgba(0, 0, 0, .22);
   }
 }
 
+.theme-light {
+  --color-primary: #2F6F64;
+  --color-primary-strong: #255A51;
+  --color-gradient-secondary: #4B8B7F;
+  --color-accent: #FF9671;
+  --color-accent-surface: #FFF0E9;
+  --color-background: #FBF7F0;
+  --color-surface: #FFFFFF;
+  --color-elevated: #FEFDFB;
+  --color-tint: #EAF4F1;
+  --color-text: #24312D;
+  --color-text-secondary: #44524D;
+  --color-muted: #66736E;
+  --color-line: #E5DDD3;
+  --color-border: #E5DDD3;
+  --color-income: #1B7D68;
+  --color-expense: #D5534C;
+  --color-warning: #A8492C;
+  --color-warning-surface: #FFF0E9;
+  --color-expense-surface: #FDECEA;
+  --color-success-surface: #EAF4F1;
+  --color-focus: #2F6F64;
+  --focus-ring: rgba(47, 111, 100, .18);
+  --color-on-primary: #FFFFFF;
+  --color-on-primary-muted: #D6EEE7;
+  --shadow-primary: rgba(47, 111, 100, .16);
+  --shadow-card: rgba(52, 65, 60, .08);
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.theme-dark {
+  --color-primary: #74C6B2;
+  --color-primary-strong: #9AD8C8;
+  --color-gradient-secondary: #4B8B7F;
+  --color-accent: #FF9F7D;
+  --color-accent-surface: #45291F;
+  --color-background: #101714;
+  --color-surface: #18221F;
+  --color-elevated: #1D2925;
+  --color-tint: #203C35;
+  --color-text: #F7F4EF;
+  --color-text-secondary: #D5DDD9;
+  --color-muted: #A5B2AD;
+  --color-line: #30433D;
+  --color-border: #30433D;
+  --color-income: #7BD4BD;
+  --color-expense: #FF9389;
+  --color-warning: #FFBA8E;
+  --color-warning-surface: #45291F;
+  --color-expense-surface: #432423;
+  --color-success-surface: #203C35;
+  --color-focus: #74C6B2;
+  --focus-ring: rgba(116, 198, 178, .22);
+  --color-on-primary: #10231E;
+  --color-on-primary-muted: #D6EEE7;
+  --shadow-primary: rgba(0, 0, 0, .28);
+  --shadow-card: rgba(0, 0, 0, .22);
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
 .page {
-  padding: 28rpx;
+  width: 100%;
+  padding: 32rpx;
+  padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 
 .card {
   background: var(--color-surface);
   border: 1rpx solid var(--color-line);
-  border-radius: 24rpx;
+  border-radius: 28rpx;
   padding: 24rpx;
 }
+
+.primary-button,
+.secondary-button,
+button {
+  display: flex;
+  min-height: 88rpx;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.25;
+}
+
+button::after { border: 0; }
+button:active { opacity: .82; }
+button[disabled] { opacity: .45; }
 
 .primary-button {
   background: var(--color-primary);
   color: var(--color-on-primary);
-  border-radius: 18rpx;
+  border-radius: 24rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.secondary-button {
+  border: 2rpx solid var(--color-line);
+  border-radius: 24rpx;
+  color: var(--color-primary);
+  background: var(--color-surface);
+}
+
+input,
+textarea,
+picker,
+.focus-surface {
+  box-sizing: border-box;
+}
+
+input:focus,
+textarea:focus,
+.focus-surface:focus-within {
+  border-color: var(--color-focus) !important;
+  box-shadow: 0 0 0 6rpx var(--focus-ring);
+}
+
+.money-number { font-variant-numeric: tabular-nums; }
+
+.page-error {
+  display: block;
+  margin-top: 16rpx;
+  color: var(--color-expense);
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-safe { animation: none !important; transition: none !important; }
 }

@@ -1,6 +1,8 @@
 import { ApiError } from '../../../src/api/client';
 import type { CategorySummary, DocumentDraft, StageResult } from '../../../src/api/contracts';
 import { getRuntime } from '../../../app';
+import { parseNzdMinor } from '../../../src/domain/money';
+import { withThemePage } from '../../../src/shared/themed-page';
 
 export interface PhotoEntryFile {
   path: string;
@@ -8,6 +10,7 @@ export interface PhotoEntryFile {
   size?: number;
   contentType?: string;
   fileHash?: string;
+  bytes?: Uint8Array;
 }
 
 export interface PhotoEntryApiPort {
@@ -22,8 +25,11 @@ export interface PhotoEntryApiPort {
 }
 
 export interface PhotoEntryState {
+  source: 'photo' | 'bill';
   file: PhotoEntryFile | null;
   draft: DocumentDraft | null;
+  amount: string;
+  needsCategoryReview: boolean;
   draftId: string;
   originalPreserved: boolean;
   uploaded: boolean;
@@ -31,6 +37,7 @@ export interface PhotoEntryState {
   confirmed: boolean;
   error: string;
   categories: CategorySummary[];
+  visibleCategories: CategorySummary[];
   categoryId: string;
   categoryName: string;
   stagedExisting: boolean;
@@ -41,26 +48,49 @@ function contentTypeFor(file: PhotoEntryFile): string {
   return /\.png$/i.test(file.name) ? 'image/png' : 'image/jpeg';
 }
 
-function hashFor(file: PhotoEntryFile): string {
+const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
+
+function signatureMatches(file: PhotoEntryFile, contentType: string): boolean {
+  const bytes = file.bytes;
+  if (!bytes) return true;
+  if (contentType === 'application/pdf') return new TextDecoder().decode(bytes.slice(0, 5)) === '%PDF-';
+  if (contentType === 'image/jpeg') return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (contentType === 'image/png') return bytes.length >= 8 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((value, index) => bytes[index] === value);
+  return false;
+}
+
+function hashFor(file: PhotoEntryFile): string | undefined {
   if (file.fileHash) return file.fileHash;
+  if (!file.bytes) return undefined;
   let hash = 2_166_136_261;
-  for (const byte of file.path + '\u0000' + file.name) hash = Math.imul(hash ^ byte.charCodeAt(0), 16_777_619);
+  for (const byte of file.bytes) hash = Math.imul(hash ^ byte, 16_777_619);
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
 export class PhotoEntryPageModel {
   state: PhotoEntryState = {
-    file: null, draft: null, draftId: '', originalPreserved: false,
-    uploaded: false, loading: false, confirmed: false, error: '', categories: [], categoryId: '', categoryName: '', stagedExisting: false,
+    source: 'photo', file: null, draft: null, amount: '', needsCategoryReview: false, draftId: '', originalPreserved: false,
+    uploaded: false, loading: false, confirmed: false, error: '', categories: [], visibleCategories: [], categoryId: '', categoryName: '', stagedExisting: false,
   };
   private readonly editedFields = new Set<keyof DocumentDraft>();
 
   constructor(private readonly api: PhotoEntryApiPort) {}
 
+  setSource(source: string | undefined): void { this.state.source = source === 'bill' ? 'bill' : 'photo'; }
+
+  preserveFileError(file: PhotoEntryFile, error: unknown): void {
+    this.state.file = file;
+    this.state.originalPreserved = true;
+    this.state.loading = false;
+    this.state.error = error instanceof Error ? error.message : '读取文件失败，请重新选择';
+  }
+
   async analyze(file: PhotoEntryFile): Promise<boolean> {
     this.state.file = file;
     this.state.originalPreserved = true;
     this.state.draft = null;
+    this.state.amount = '';
+    this.state.needsCategoryReview = false;
     this.state.draftId = '';
     this.state.uploaded = false;
     this.state.confirmed = false;
@@ -72,6 +102,11 @@ export class PhotoEntryPageModel {
     this.state.loading = true;
     try {
       const contentType = contentTypeFor(file);
+      if (Math.max(file.size ?? 0, file.bytes?.byteLength ?? 0) > MAX_IMPORT_BYTES) throw new Error('文件不能超过 20 MB');
+      if (!['image/jpeg', 'image/png', 'application/pdf'].includes(contentType)) throw new Error('文件类型不受支持');
+      if (!signatureMatches(file, contentType)) throw new Error('文件类型与内容签名不匹配');
+      const fileHash = hashFor(file);
+      if (this.api.stageImport && !fileHash) throw new Error('无法读取文件内容，请重新选择');
       const draft = this.api.analyzePhoto
         ? await this.api.analyzePhoto({ filePath: file.path, fileName: file.name, contentType })
         : this.api.previewDocument
@@ -80,9 +115,12 @@ export class PhotoEntryPageModel {
             ? await this.api.parseDraft(file.path)
             : (() => { throw new Error('AI 分析暂不可用'); })();
       this.state.draft = draft;
+      this.state.amount = (draft.amountMinor / 100).toFixed(2);
+      this.state.needsCategoryReview = (draft.fieldConfidence?.category ?? draft.confidence ?? 1) < 0.8;
       if (this.api.fetchCategories) {
         const categories = await this.api.fetchCategories();
         this.state.categories = categories.filter((category) => category.active !== false);
+        this.refreshVisibleCategories();
         const matched = this.state.categories.find((category) => category.direction === draft.direction && category.name === draft.categoryHint);
         if (matched) {
           this.state.categoryId = matched.id;
@@ -91,7 +129,7 @@ export class PhotoEntryPageModel {
         }
       }
       if (this.api.stageImport && this.api.confirmDraft) {
-        const staged = await this.api.stageImport({ fileHash: hashFor(file), sourceType: 'manual-photo', draft: this.state.draft ?? draft });
+        const staged = await this.api.stageImport({ fileHash, sourceType: contentType === 'application/pdf' ? 'pdf' : 'manual-photo', draft: this.state.draft ?? draft });
         this.state.draftId = staged.draftId ?? staged.draft?.id ?? '';
         if (staged.reused && !this.state.draftId) {
           this.state.stagedExisting = true;
@@ -116,12 +154,29 @@ export class PhotoEntryPageModel {
       this.state.draft = { ...this.state.draft, ...patch };
       Object.keys(patch).forEach((field) => this.editedFields.add(field as keyof DocumentDraft));
       if (patch.categoryId !== undefined) this.state.categoryId = patch.categoryId;
+      if (patch.direction !== undefined) {
+        this.refreshVisibleCategories();
+        if (!this.state.visibleCategories.some((category) => category.id === this.state.categoryId)) {
+          this.state.categoryId = '';
+          this.state.categoryName = '';
+        }
+      }
       if (patch.categoryHint !== undefined) {
         const matched = this.state.categories.find((category) => category.direction === this.state.draft?.direction && category.name === patch.categoryHint);
         this.state.categoryId = matched?.id ?? '';
         this.state.categoryName = matched?.name ?? '';
       }
     }
+  }
+
+  private refreshVisibleCategories(): void {
+    const direction = this.state.draft?.direction;
+    this.state.visibleCategories = this.state.categories.filter((category) => category.direction === direction);
+  }
+
+  updateAmount(value: string): void {
+    this.state.amount = value;
+    try { this.updateDraft({ amountMinor: parseNzdMinor(value) }); } catch { /* keep incomplete user input until save */ }
   }
 
   setCategoryByIndex(index: number): void {
@@ -180,25 +235,69 @@ interface PageContext { setData(data: unknown): void }
 interface WxPhotoRuntime {
   chooseMedia(options: { count: number; mediaType: string[]; sourceType: string[]; success: (result: { tempFiles: Array<{ tempFilePath?: string; path?: string; name?: string; size?: number; fileType?: string }> }) => void; fail: (error: unknown) => void }): void;
   navigateTo(options: { url: string }): void;
+  navigateBack(options?: { delta?: number }): void;
+  chooseMessageFile(options: { count: number; type: string; success: (result: { tempFiles: Array<{ path?: string; tempFilePath?: string; name?: string; size?: number; type?: string }> }) => void; fail: (error: unknown) => void }): void;
+  getFileSystemManager(): { readFile(options: { filePath: string; success: (result: { data: ArrayBuffer }) => void; fail: (error: unknown) => void }): void };
 }
 declare const wx: WxPhotoRuntime;
+
+function readFileBytes(path: string): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => wx.getFileSystemManager().readFile({
+    filePath: path,
+    success: (result) => resolve(new Uint8Array(result.data)),
+    fail: reject,
+  }));
+}
 
 export function createPhotoEntryPage(model: PhotoEntryPageModel) {
   return {
     data: model.state,
+    onLoad(this: PageContext, options: { source?: string } = {}) { model.setSource(options.source); this.setData(model.state); },
     choosePhoto(this: PageContext) {
       wx.chooseMedia({
         count: 1, mediaType: ['image'], sourceType: ['camera'],
         success: async (result) => {
           const file = result.tempFiles[0];
-          if (file) await model.analyze({ path: file.tempFilePath ?? file.path ?? '', name: file.name ?? 'receipt.jpg', size: file.size, contentType: file.fileType === 'png' ? 'image/png' : 'image/jpeg' });
+          if (file) {
+            const path = file.tempFilePath ?? file.path ?? '';
+            const selected = { path, name: file.name ?? 'receipt.jpg', size: file.size, contentType: file.fileType === 'png' ? 'image/png' : 'image/jpeg' };
+            try {
+              const pending = model.analyze({ ...selected, bytes: await readFileBytes(path) });
+              this.setData(model.state);
+              await pending;
+            } catch (error) { model.preserveFileError(selected, error); }
+          }
           this.setData(model.state);
         },
         fail: () => this.setData(model.state),
       });
     },
+    chooseBillFile(this: PageContext): Promise<void> {
+      return new Promise((resolve) => wx.chooseMessageFile({
+        count: 1, type: 'all',
+        success: async (result) => {
+          const file = result.tempFiles[0];
+          if (file) {
+            const name = file.name ?? 'bill.pdf';
+            const contentType = /\.pdf$/i.test(name) || file.type === 'pdf' ? 'application/pdf' : /\.png$/i.test(name) ? 'image/png' : 'image/jpeg';
+            const path = file.tempFilePath ?? file.path ?? '';
+            const selected = { path, name, size: file.size, contentType };
+            try {
+              const pending = model.analyze({ ...selected, bytes: await readFileBytes(path) });
+              this.setData(model.state);
+              await pending;
+            } catch (error) { model.preserveFileError(selected, error); }
+          }
+          this.setData(model.state);
+          resolve();
+        },
+        fail: () => { this.setData(model.state); resolve(); },
+      }));
+    },
     async retry(this: PageContext) { await model.retry(); this.setData(model.state); },
     openManual() { wx.navigateTo({ url: '/pages/ledger/edit/index' }); },
+    close() { wx.navigateBack({ delta: 1 }); },
+    onAmountInput(this: PageContext, event: { detail?: { value?: string } }) { model.updateAmount(event.detail?.value ?? ''); this.setData(model.state); },
     onDraftInput(this: PageContext, event: { currentTarget?: { dataset?: { field?: keyof DocumentDraft } }; detail?: { value?: string } }) {
       const field = event.currentTarget?.dataset?.field;
       const value = event.detail?.value;
@@ -206,6 +305,18 @@ export function createPhotoEntryPage(model: PhotoEntryPageModel) {
       this.setData(model.state);
     },
     onCategoryChange(this: PageContext, event: { detail?: { value?: number } }) { model.setCategoryByIndex(Number(event.detail?.value ?? -1)); this.setData(model.state); },
+    onCategoryTap(this: PageContext, event: { currentTarget?: { dataset?: { id?: string } } }) {
+      const id = event.currentTarget?.dataset?.id ?? '';
+      const category = model.state.visibleCategories.find((item) => item.id === id);
+      if (category) model.updateDraft({ categoryId: category.id, categoryHint: category.name });
+      this.setData(model.state);
+    },
+    onDirectionChange(this: PageContext, event: { currentTarget?: { dataset?: { value?: string } } }) {
+      const value = event.currentTarget?.dataset?.value;
+      if (value === 'income' || value === 'expense') model.updateDraft({ direction: value });
+      this.setData(model.state);
+    },
+    onDateChange(this: PageContext, event: { detail?: { value?: string } }) { model.updateDraft({ occurredAt: event.detail?.value ?? '' }); this.setData(model.state); },
     async confirm(this: PageContext) { await model.confirm(); this.setData(model.state); },
   };
 }
@@ -214,5 +325,5 @@ declare function Page(options: Record<string, unknown>): void;
 declare function getApp<T>(): T;
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  Page(createPhotoEntryPage(new PhotoEntryPageModel(runtime.api as unknown as PhotoEntryApiPort)));
+  Page(withThemePage(createPhotoEntryPage(new PhotoEntryPageModel(runtime.api as unknown as PhotoEntryApiPort)), runtime.theme));
 }

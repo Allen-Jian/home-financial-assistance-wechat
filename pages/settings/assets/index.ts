@@ -1,6 +1,7 @@
 import type { AccountSummary } from '../../../src/api/contracts';
 import { getRuntime } from '../../../app';
 import { parseNzdMinor } from '../../../src/domain/money';
+import { withThemePage } from '../../../src/shared/themed-page';
 
 export interface AssetSettingsApiPort {
   fetchAccounts(): Promise<AccountSummary[]>;
@@ -67,5 +68,5 @@ declare function Page(options: Record<string, unknown>): void;
 declare function getApp<T>(): T;
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  Page(createAssetSettingsPage(new AssetSettingsModel(runtime.api)));
+  Page(withThemePage(createAssetSettingsPage(new AssetSettingsModel(runtime.api)), runtime.theme));
 }

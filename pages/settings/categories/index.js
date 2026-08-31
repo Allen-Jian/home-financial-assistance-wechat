@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CategorySettingsModel = void 0;
 exports.createCategorySettingsPage = createCategorySettingsPage;
 const app_1 = require("../../../app");
+const themed_page_1 = require("../../../src/shared/themed-page");
 class CategorySettingsModel {
     constructor(api) {
         this.api = api;
@@ -105,5 +106,5 @@ function createCategorySettingsPage(model) {
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
     const runtime = (0, app_1.getRuntime)();
-    Page(createCategorySettingsPage(new CategorySettingsModel(runtime.api)));
+    Page((0, themed_page_1.withThemePage)(createCategorySettingsPage(new CategorySettingsModel(runtime.api)), runtime.theme));
 }

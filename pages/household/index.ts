@@ -1,5 +1,6 @@
 import type { HouseholdInvite, HouseholdMember } from '../../src/api/contracts';
 import { getRuntime } from '../../app';
+import { withThemePage } from '../../src/shared/themed-page';
 
 export type HouseholdRole = 'owner' | 'member';
 export interface HouseholdApiPort {
@@ -120,5 +121,5 @@ if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
     const current = model.state.members.find((member) => member.userId === currentUserId);
     if (current) { model.setRole(current.role); this.setData(model.state); }
   };
-  Page(page);
+  Page(withThemePage(page, runtime.theme));
 }

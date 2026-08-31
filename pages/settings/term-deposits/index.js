@@ -3,6 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TermDepositSettingsModel = void 0;
 exports.createTermDepositSettingsPage = createTermDepositSettingsPage;
 const app_1 = require("../../../app");
+const money_1 = require("../../../src/domain/money");
+const themed_page_1 = require("../../../src/shared/themed-page");
+function depositDisplay(deposit) {
+    const statusLabel = deposit.status === 'closed' ? '已关闭' : deposit.status === 'matured' ? '已到期' : '存续中';
+    return { ...deposit, principalDisplay: (0, money_1.formatNzdMinor)(deposit.principalMinor), statusLabel };
+}
 class TermDepositSettingsModel {
     constructor(api) {
         this.api = api;
@@ -16,7 +22,7 @@ class TermDepositSettingsModel {
         this.state.loading = true;
         this.state.error = '';
         try {
-            this.state.deposits = await this.api.fetchTermDeposits();
+            this.state.deposits = (await this.api.fetchTermDeposits()).map(depositDisplay);
         }
         catch (error) {
             this.state.error = error instanceof Error ? error.message : '加载定存失败';
@@ -31,7 +37,7 @@ class TermDepositSettingsModel {
             return false;
         }
         try {
-            this.state.deposits.push(await this.api.createTermDeposit(input));
+            this.state.deposits.push(depositDisplay(await this.api.createTermDeposit(input)));
             return true;
         }
         catch (error) {
@@ -49,7 +55,7 @@ class TermDepositSettingsModel {
             const updated = await this.api.closeTermDeposit(id, expectedVersion);
             const index = this.state.deposits.findIndex((deposit) => deposit.id === id);
             if (index >= 0)
-                this.state.deposits[index] = { ...this.state.deposits[index], ...updated };
+                this.state.deposits[index] = depositDisplay({ ...this.state.deposits[index], ...updated });
             return true;
         }
         catch (error) {
@@ -88,5 +94,5 @@ function createTermDepositSettingsPage(model) {
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
     const runtime = (0, app_1.getRuntime)();
-    Page(createTermDepositSettingsPage(new TermDepositSettingsModel(runtime.api)));
+    Page((0, themed_page_1.withThemePage)(createTermDepositSettingsPage(new TermDepositSettingsModel(runtime.api)), runtime.theme));
 }

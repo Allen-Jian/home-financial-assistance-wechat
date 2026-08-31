@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.HouseholdPageModel = void 0;
 exports.createHouseholdPage = createHouseholdPage;
 const app_1 = require("../../app");
+const themed_page_1 = require("../../src/shared/themed-page");
 class HouseholdPageModel {
     constructor(api, role, copy) {
         this.api = api;
@@ -131,5 +132,5 @@ if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
             this.setData(model.state);
         }
     };
-    Page(page);
+    Page((0, themed_page_1.withThemePage)(page, runtime.theme));
 }

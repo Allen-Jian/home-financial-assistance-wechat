@@ -7,6 +7,7 @@ const client_1 = require("../../src/api/client");
 const money_1 = require("../../src/domain/money");
 const app_1 = require("../../app");
 const period_1 = require("../../src/domain/period");
+const themed_page_1 = require("../../src/shared/themed-page");
 const directionLabels = {
     income: '收入', expense: '支出', transfer: '转账', adjustment: '调整',
 };
@@ -64,7 +65,8 @@ class LedgerListPageModel {
         this.requestGeneration = 0;
         this.state = {
             periodMode: 'month', period: { from: '', to: '' }, customFrom: '', customTo: '',
-            transactions: [], selectedTransaction: null, selectedAmountDisplay: '', selectedDateDisplay: '', selectedDirectionLabel: '', loading: false, error: '',
+            transactions: [], selectedTransaction: null, selectedAmountDisplay: '', selectedDateDisplay: '', selectedDirectionLabel: '',
+            incomeDisplay: '+ NZ$0.00', expenseDisplay: '− NZ$0.00', netDisplay: 'NZ$0.00', loading: false, error: '',
         };
         const period = this.currentPeriod();
         this.state.period = period;
@@ -109,9 +111,11 @@ class LedgerListPageModel {
             this.state.transactions = transactions.map((transaction) => ({
                 ...transaction,
                 amountDisplay: (0, money_1.formatNzdMinor)(transaction.amountMinor),
+                signedAmountDisplay: `${transaction.direction === 'expense' ? '−' : '+'} ${(0, money_1.formatNzdMinor)(transaction.amountMinor)}`,
                 dateDisplay: toDisplayDate(transaction.occurredAt),
                 directionLabel: directionLabels[transaction.direction],
             }));
+            this.updateTotals(transactions);
             return true;
         }
         catch (error) {
@@ -124,8 +128,10 @@ class LedgerListPageModel {
             const cached = error instanceof client_1.ApiError && (error.code === 'network' || error.code === 'timeout')
                 ? (_b = this.cache) === null || _b === void 0 ? void 0 : _b.read(cacheKey, 5 * 60000)
                 : null;
-            if (cached)
-                this.state.transactions = cached.data.map((transaction) => ({ ...transaction, amountDisplay: (0, money_1.formatNzdMinor)(transaction.amountMinor), dateDisplay: toDisplayDate(transaction.occurredAt), directionLabel: directionLabels[transaction.direction] }));
+            if (cached) {
+                this.state.transactions = cached.data.map((transaction) => ({ ...transaction, amountDisplay: (0, money_1.formatNzdMinor)(transaction.amountMinor), signedAmountDisplay: `${transaction.direction === 'expense' ? '−' : '+'} ${(0, money_1.formatNzdMinor)(transaction.amountMinor)}`, dateDisplay: toDisplayDate(transaction.occurredAt), directionLabel: directionLabels[transaction.direction] }));
+                this.updateTotals(cached.data);
+            }
             else
                 this.state.error = error instanceof Error ? error.message : '加载账目失败';
             return false;
@@ -141,7 +147,7 @@ class LedgerListPageModel {
             this.state.selectedTransaction = null;
             return;
         }
-        const { amountDisplay: _amountDisplay, dateDisplay: _dateDisplay, directionLabel: _directionLabel, ...transaction } = selected;
+        const { amountDisplay: _amountDisplay, signedAmountDisplay: _signedAmountDisplay, dateDisplay: _dateDisplay, directionLabel: _directionLabel, ...transaction } = selected;
         this.state.selectedTransaction = transaction;
         this.state.selectedAmountDisplay = selected.amountDisplay;
         this.state.selectedDateDisplay = selected.dateDisplay;
@@ -150,12 +156,23 @@ class LedgerListPageModel {
     setCustomFrom(value) { this.state.customFrom = value; }
     setCustomTo(value) { this.state.customTo = value; }
     cacheKey(period, scope = this.householdId()) { return `ledger:${scope}:${period.from}:${period.to}`; }
+    updateTotals(transactions) {
+        const income = transactions.filter((item) => item.direction === 'income').reduce((total, item) => total + item.amountMinor, 0);
+        const expense = transactions.filter((item) => item.direction === 'expense').reduce((total, item) => total + item.amountMinor, 0);
+        const net = income - expense;
+        this.state.incomeDisplay = `+ ${(0, money_1.formatNzdMinor)(income)}`;
+        this.state.expenseDisplay = `− ${(0, money_1.formatNzdMinor)(expense)}`;
+        this.state.netDisplay = `${net > 0 ? '+ ' : net < 0 ? '− ' : ''}${(0, money_1.formatNzdMinor)(Math.abs(net))}`;
+    }
     clearPrivateState() {
         this.state.transactions = [];
         this.state.selectedTransaction = null;
         this.state.selectedAmountDisplay = '';
         this.state.selectedDateDisplay = '';
         this.state.selectedDirectionLabel = '';
+        this.state.incomeDisplay = '+ NZ$0.00';
+        this.state.expenseDisplay = '− NZ$0.00';
+        this.state.netDisplay = 'NZ$0.00';
         this.state.error = '';
     }
     shiftMonth(delta) {
@@ -366,9 +383,11 @@ function createLedgerListPage(model) {
             model.state.selectedDirectionLabel = '';
             this.setData(model.state);
         },
+        openBankImport() { wx.navigateTo({ url: '/pages/imports/index?mode=statement' }); },
+        openManualEntry() { wx.navigateTo({ url: '/pages/ledger/edit/index' }); },
     };
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
     const runtime = (0, app_1.getRuntime)();
-    Page(createLedgerListPage(new LedgerListPageModel(runtime.api, undefined, runtime.cache, () => { var _a, _b; return (_b = (_a = runtime.sessions.read()) === null || _a === void 0 ? void 0 : _a.householdId) !== null && _b !== void 0 ? _b : 'anonymous'; })));
+    Page((0, themed_page_1.withThemePage)(createLedgerListPage(new LedgerListPageModel(runtime.api, undefined, runtime.cache, () => { var _a, _b; return (_b = (_a = runtime.sessions.read()) === null || _a === void 0 ? void 0 : _a.householdId) !== null && _b !== void 0 ? _b : 'anonymous'; })), runtime.theme));
 }

@@ -4,6 +4,7 @@ exports.AssetSettingsModel = void 0;
 exports.createAssetSettingsPage = createAssetSettingsPage;
 const app_1 = require("../../../app");
 const money_1 = require("../../../src/domain/money");
+const themed_page_1 = require("../../../src/shared/themed-page");
 class AssetSettingsModel {
     constructor(api) {
         this.api = api;
@@ -74,5 +75,5 @@ function createAssetSettingsPage(model) {
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
     const runtime = (0, app_1.getRuntime)();
-    Page(createAssetSettingsPage(new AssetSettingsModel(runtime.api)));
+    Page((0, themed_page_1.withThemePage)(createAssetSettingsPage(new AssetSettingsModel(runtime.api)), runtime.theme));
 }

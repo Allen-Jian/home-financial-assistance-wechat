@@ -1,5 +1,7 @@
 import type { RecurringSummary } from '../../src/api/contracts';
 import { getRuntime } from '../../app';
+import { formatNzdMinor } from '../../src/domain/money';
+import { withThemePage } from '../../src/shared/themed-page';
 
 export interface RecurringApiPort {
   fetchRecurring(): Promise<RecurringSummary[]>;
@@ -7,7 +9,10 @@ export interface RecurringApiPort {
   advanceRecurring(id: string): Promise<RecurringSummary>;
 }
 
-export interface RecurringPageState { templates: RecurringSummary[]; dueCount: number; loading: boolean; error: string }
+export interface RecurringDisplay extends RecurringSummary { amountDisplay: string }
+export interface RecurringPageState { templates: RecurringDisplay[]; dueCount: number; loading: boolean; error: string }
+
+function recurringDisplay(item: RecurringSummary): RecurringDisplay { return { ...item, amountDisplay: formatNzdMinor(item.amountMinor) }; }
 
 export class RecurringPageModel {
   state: RecurringPageState = { templates: [], dueCount: 0, loading: false, error: '' };
@@ -16,7 +21,7 @@ export class RecurringPageModel {
   async load(): Promise<void> {
     this.state.loading = true;
     try {
-      this.state.templates = await this.api.fetchRecurring();
+      this.state.templates = (await this.api.fetchRecurring()).map(recurringDisplay);
       this.state.dueCount = this.state.templates.filter((item) => item.active).length;
     } catch (error) {
       this.state.error = error instanceof Error ? error.message : '加载周期账单失败';
@@ -30,7 +35,7 @@ export class RecurringPageModel {
       this.state.error = '周期账单金额和日期无效';
       return false;
     }
-    try { this.state.templates.push(await this.api.createRecurring(input)); this.state.dueCount += 1; return true; }
+    try { this.state.templates.push(recurringDisplay(await this.api.createRecurring(input))); this.state.dueCount += 1; return true; }
     catch (error) { this.state.error = error instanceof Error ? error.message : '创建周期账单失败'; return false; }
   }
 
@@ -38,7 +43,7 @@ export class RecurringPageModel {
     try {
       const updated = await this.api.advanceRecurring(id);
       const index = this.state.templates.findIndex((item) => item.id === id);
-      if (index >= 0) this.state.templates[index] = { ...this.state.templates[index], ...updated };
+      if (index >= 0) this.state.templates[index] = recurringDisplay({ ...this.state.templates[index], ...updated });
       return true;
     } catch (error) { this.state.error = error instanceof Error ? error.message : '更新周期账单失败'; return false; }
   }
@@ -57,5 +62,5 @@ declare function Page(options: Record<string, unknown>): void;
 declare function getApp<T>(): unknown;
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  Page(createRecurringPage(new RecurringPageModel(runtime.api)));
+  Page(withThemePage(createRecurringPage(new RecurringPageModel(runtime.api)), runtime.theme));
 }

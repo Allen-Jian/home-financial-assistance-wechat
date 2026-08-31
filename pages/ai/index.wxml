@@ -1,1 +1,17 @@
-<view class="page ai-page"><view class="page-title"><text>AI 账本助手</text><text class="sub">{{notice}}</text></view><view class="quick-row"><block wx:for="{{quickQuestions}}" wx:key="*this"><button bindtap="quickQuestion" data-question="{{item}}">{{item}}</button></block></view><scroll-view scroll-y class="chat-list"><block wx:for="{{messages}}" wx:key="index"><view class="message {{item.role}}"><text>{{item.content}}</text><text wx:if="{{item.scope}}" class="scope">范围：{{item.scope.from}} — {{item.scope.to}}</text><block wx:for="{{item.insights}}" wx:key="title"><view class="insight"><text>{{item.title}}</text><text wx:if="{{item.value}}">{{item.value}} {{item.unit}}</text></view></block><block wx:for="{{item.citations}}" wx:key="transactionId"><text class="citation">引用：{{item.merchant || '未命名'}} · NZ$ {{item.amountMinor / 100}}</text></block></view></block></scroll-view><text wx:if="{{error}}" class="error">{{error}}</text><view class="composer"><input placeholder="问问家庭账本" bindconfirm="send" confirm-type="send"/><button class="primary-button" loading="{{loading}}" bindtap="send">发送</button></view><button class="delete-button" bindtap="deleteHistory">删除聊天记录</button></view>
+<page-meta page-style="{{themePageStyle}}" />
+<view class="page ai-page {{themeClass}}">
+  <view class="ai-header"><view><text class="ai-title">AI 账本助手</text><text class="ai-notice"><text class="shield-dot">✓</text>{{notice}}</text></view><button class="clear-chat" bindtap="deleteHistory">清空</button></view>
+  <scroll-view scroll-x class="suggestion-scroll"><view class="suggestions"><button wx:for="{{quickQuestions}}" wx:key="*this" bindtap="quickQuestion" data-question="{{item}}">{{item}}</button></view></scroll-view>
+  <scroll-view scroll-y class="chat-list">
+    <view wx:if="{{messages.length === 0}}" class="chat-empty"><view class="ai-orb"></view><text>想了解哪一段家庭收支？</text><text>可以问分类趋势、异常支出或两个时期的比较。</text></view>
+    <view wx:for="{{messages}}" wx:key="index" class="message {{item.role}}">
+      <view wx:if="{{item.role === 'assistant'}}" class="assistant-label"><view class="spark-icon"></view><text>账本助手</text></view><text class="message-content">{{item.content}}</text>
+      <view wx:for="{{item.insights}}" wx:key="title" class="insight-line"><text>{{item.title}}</text><text wx:if="{{item.value}}">{{item.value}} {{item.unit}}</text></view>
+      <text wx:if="{{item.scope}}" class="scope-line">分析范围：{{item.scope.from}} — {{item.scope.to}}</text>
+      <view wx:if="{{item.citations && item.citations.length}}" class="citation-list"><view wx:for="{{item.citations}}" wx:key="transactionId" class="citation-row"><view class="receipt-icon"></view><text>{{item.merchant || '未命名账目'}} · {{item.amountDisplay}}</text></view></view>
+    </view>
+    <view wx:if="{{loading}}" class="typing"><view></view><view></view><view></view></view>
+  </scroll-view>
+  <text wx:if="{{error}}" class="page-error">{{error}}</text>
+  <view class="composer focus-surface"><textarea auto-height maxlength="500" placeholder="问问家庭账本" value="{{draft}}" bindinput="onInput"></textarea><button bindtap="sendCurrent" loading="{{loading}}" aria-label="发送问题">↑</button></view>
+</view>

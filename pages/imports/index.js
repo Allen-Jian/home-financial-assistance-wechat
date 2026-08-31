@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ImportPageModel = exports.MAX_IMPORT_BYTES = void 0;
 exports.createImportPage = createImportPage;
 const app_1 = require("../../app");
+const money_1 = require("../../src/domain/money");
+const themed_page_1 = require("../../src/shared/themed-page");
 exports.MAX_IMPORT_BYTES = 20 * 1024 * 1024;
 function toPickedFile(file, fallbackType) {
     var _a, _b, _c, _d, _e, _f, _g;
@@ -63,11 +65,15 @@ class ImportPageModel {
         this.api = api;
         this.hashFile = hashFile;
         this.state = {
-            file: null, sourceType: null, preview: null, rows: [], stageResult: null, uploaded: false,
-            originalPreserved: false, loading: false, error: '', textInput: '',
+            mode: 'bill', view: 'upload', file: null, sourceType: null, preview: null, previewAmountDisplay: '', rows: [], stageResult: null, uploaded: false,
+            originalPreserved: false, loading: false, error: '', textInput: '', matched: [], duplicates: [], missing: [], selectedMissingCount: 0, confirmedMissingCount: 0,
         };
         this.content = null;
         this.staged = new Map();
+    }
+    setMode(mode) {
+        this.state.mode = mode === 'statement' ? 'statement' : 'bill';
+        this.state.view = 'upload';
     }
     choosePhoto() { return this.select(this.picker.chooseMedia(), 'manual-photo'); }
     chooseAlbum() { return this.select(this.picker.chooseAlbum(), 'manual-photo'); }
@@ -82,6 +88,71 @@ class ImportPageModel {
         }
     }
     chooseCsv() { return this.select(this.picker.chooseMessageFile(), 'anz-csv'); }
+    toggleMissing(sourceFingerprint) {
+        this.state.missing = this.state.missing.map((row) => row.sourceFingerprint === sourceFingerprint ? { ...row, selected: !row.selected } : row);
+        this.state.selectedMissingCount = this.state.missing.filter((row) => row.selected).length;
+    }
+    async confirmSelectedMissing() {
+        var _a, _b;
+        const selected = this.state.missing.filter((row) => row.selected);
+        if (!selected.length)
+            return this.reject('请先选择需要补录的账目');
+        if (!this.content || !this.api.confirmDraft)
+            return this.reject('补录接口暂不可用');
+        this.state.loading = true;
+        this.state.error = '';
+        try {
+            const baseHash = await this.hashFile(this.content);
+            for (const row of selected) {
+                const result = await this.api.stageImport({
+                    fileHash: `${baseHash}:${row.sourceFingerprint}`,
+                    sourceType: 'anz-csv',
+                    draft: { amountMinor: row.amountMinor, direction: row.direction, occurredAt: row.date, merchant: row.merchant, sourceFingerprint: row.sourceFingerprint },
+                });
+                const draftId = (_b = (_a = result.draft) === null || _a === void 0 ? void 0 : _a.id) !== null && _b !== void 0 ? _b : result.draftId;
+                if (!draftId)
+                    throw new Error('未能生成待确认草稿');
+                await this.api.confirmDraft(draftId, {});
+            }
+            this.state.confirmedMissingCount = selected.length;
+            this.state.missing = this.state.missing.filter((row) => !row.selected);
+            this.state.selectedMissingCount = 0;
+            return true;
+        }
+        catch (error) {
+            this.state.error = error instanceof Error ? error.message : '补录失败，请稍后重试';
+            return false;
+        }
+        finally {
+            this.state.loading = false;
+        }
+    }
+    async resolveDuplicate(sourceFingerprint, action) {
+        var _a, _b;
+        const row = this.state.duplicates.find((item) => item.sourceFingerprint === sourceFingerprint);
+        if (!row)
+            return false;
+        if (action === 'later') {
+            row.resolution = 'later';
+            return true;
+        }
+        if (!this.content || !this.api.confirmDraft)
+            return this.reject('补录接口暂不可用');
+        try {
+            const baseHash = await this.hashFile(this.content);
+            const result = await this.api.stageImport({ fileHash: `${baseHash}:${row.sourceFingerprint}:keep`, sourceType: 'anz-csv', draft: row });
+            const draftId = (_b = (_a = result.draft) === null || _a === void 0 ? void 0 : _a.id) !== null && _b !== void 0 ? _b : result.draftId;
+            if (!draftId)
+                throw new Error('未能生成待确认草稿');
+            await this.api.confirmDraft(draftId, { allowDuplicate: true });
+            row.resolution = 'keep-both';
+            return true;
+        }
+        catch (error) {
+            this.state.error = error instanceof Error ? error.message : '重复项处理失败';
+            return false;
+        }
+    }
     async parseText(input) {
         const value = input.trim();
         if (!value)
@@ -90,6 +161,7 @@ class ImportPageModel {
         this.state.error = '';
         try {
             this.state.preview = await this.api.parseDraft(value);
+            this.state.previewAmountDisplay = (0, money_1.formatNzdMinor)(this.state.preview.amountMinor);
             this.state.file = null;
             this.state.sourceType = 'text';
             this.state.textInput = value;
@@ -145,8 +217,9 @@ class ImportPageModel {
         }
     }
     async select(filePromise, sourceType) {
-        var _a, _b;
+        var _a, _b, _c;
         this.state.loading = true;
+        this.state.view = this.state.mode === 'statement' ? 'analyzing' : 'preview';
         this.state.error = '';
         try {
             const file = await filePromise;
@@ -162,6 +235,7 @@ class ImportPageModel {
             this.state.file = file;
             this.state.sourceType = sourceType;
             this.state.preview = null;
+            this.state.previewAmountDisplay = '';
             this.state.rows = [];
             this.state.stageResult = null;
             this.state.uploaded = false;
@@ -169,8 +243,23 @@ class ImportPageModel {
             this.state.textInput = '';
             if (sourceType === 'anz-csv')
                 this.state.rows = await this.api.previewAnzCsv(asText(this.content));
-            else
+            else {
                 this.state.preview = await this.api.previewDocument({ filePath: file.path, fileName: file.name, contentType: file.contentType });
+                this.state.previewAmountDisplay = (0, money_1.formatNzdMinor)(this.state.preview.amountMinor);
+            }
+            if (this.state.mode === 'statement') {
+                if (!this.state.rows.length && this.state.preview) {
+                    this.state.rows = [{
+                            date: (_c = this.state.preview.occurredAt) !== null && _c !== void 0 ? _c : new Date().toISOString().slice(0, 10),
+                            amountMinor: this.state.preview.amountMinor,
+                            direction: this.state.preview.direction,
+                            merchant: this.state.preview.merchant,
+                            sourceFingerprint: `${file.name}:0`,
+                        }];
+                }
+                await this.analyzeStatement();
+                this.state.view = 'results';
+            }
             return true;
         }
         catch (error) {
@@ -183,20 +272,48 @@ class ImportPageModel {
         }
     }
     reject(message) { this.state.error = message; this.state.loading = false; return false; }
+    async analyzeStatement() {
+        const classified = await Promise.all(this.state.rows.map(async (row) => {
+            const candidates = this.api.previewDuplicates ? await this.api.previewDuplicates({
+                id: row.sourceFingerprint,
+                amountMinor: row.amountMinor,
+                direction: row.direction,
+                occurredAt: /^\d{4}-\d{2}-\d{2}$/.test(row.date) ? `${row.date}T00:00:00.000Z` : row.date,
+                merchant: row.merchant,
+                sourceFingerprint: row.sourceFingerprint,
+            }) : [];
+            const item = { ...row, amountDisplay: `${row.direction === 'expense' ? '−' : '+'} ${(0, money_1.formatNzdMinor)(row.amountMinor)}`, selected: candidates.length === 0, candidates };
+            return { row: item, kind: candidates.some((candidate) => candidate.score >= 95) ? 'matched' : candidates.length ? 'duplicate' : 'missing' };
+        }));
+        this.state.matched = classified.filter((item) => item.kind === 'matched').map((item) => item.row);
+        this.state.duplicates = classified.filter((item) => item.kind === 'duplicate').map((item) => item.row);
+        this.state.missing = classified.filter((item) => item.kind === 'missing').map((item) => item.row);
+        this.state.selectedMissingCount = this.state.missing.length;
+    }
 }
 exports.ImportPageModel = ImportPageModel;
 function createImportPage(model) {
     return {
         data: model.state,
-        async choosePhoto() { await model.choosePhoto(); this.setData(model.state); },
-        async chooseAlbum() { await model.chooseAlbum(); this.setData(model.state); },
-        async chooseFile() { await model.chooseFile(); this.setData(model.state); },
-        async chooseCsv() { await model.chooseCsv(); this.setData(model.state); },
+        onLoad(options = {}) { model.setMode(options.mode); this.setData(model.state); },
+        async choosePhoto() { const pending = model.choosePhoto(); this.setData(model.state); await pending; this.setData(model.state); },
+        async chooseAlbum() { const pending = model.chooseAlbum(); this.setData(model.state); await pending; this.setData(model.state); },
+        async chooseFile() { const pending = model.chooseFile(); this.setData(model.state); await pending; this.setData(model.state); },
+        async chooseCsv() { const pending = model.chooseCsv(); this.setData(model.state); await pending; this.setData(model.state); },
         async parseText(event) { var _a, _b; await model.parseText((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); this.setData(model.state); },
         async stage() { await model.stage(); this.setData(model.state); },
+        toggleMissing(event) { var _a, _b, _c; model.toggleMissing((_c = (_b = (_a = event.currentTarget) === null || _a === void 0 ? void 0 : _a.dataset) === null || _b === void 0 ? void 0 : _b.id) !== null && _c !== void 0 ? _c : ''); this.setData(model.state); },
+        async confirmSelectedMissing() { await model.confirmSelectedMissing(); this.setData(model.state); },
+        async resolveDuplicate(event) {
+            var _a, _b, _c, _d, _e;
+            const action = (_b = (_a = event.currentTarget) === null || _a === void 0 ? void 0 : _a.dataset) === null || _b === void 0 ? void 0 : _b.action;
+            if (action === 'later' || action === 'keep-both')
+                await model.resolveDuplicate((_e = (_d = (_c = event.currentTarget) === null || _c === void 0 ? void 0 : _c.dataset) === null || _d === void 0 ? void 0 : _d.id) !== null && _e !== void 0 ? _e : '', action);
+            this.setData(model.state);
+        },
     };
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
     const runtime = (0, app_1.getRuntime)();
-    Page(createImportPage(new ImportPageModel(createImportPicker(), runtime.api)));
+    Page((0, themed_page_1.withThemePage)(createImportPage(new ImportPageModel(createImportPicker(), runtime.api)), runtime.theme));
 }

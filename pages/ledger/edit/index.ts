@@ -2,6 +2,7 @@ import { ApiError } from '../../../src/api/client';
 import { parseNzdMinor } from '../../../src/domain/money';
 import type { CategorySummary, Direction } from '../../../src/api/contracts';
 import { getRuntime } from '../../../app';
+import { withThemePage } from '../../../src/shared/themed-page';
 
 export interface ManualEntryApiPort {
   createTransaction(input: Record<string, unknown>): Promise<unknown>;
@@ -15,7 +16,9 @@ export interface ManualEntryState {
   categoryName: string;
   occurredAt: string;
   note: string;
+  merchant: string;
   categories: CategorySummary[];
+  visibleCategories: CategorySummary[];
   loading: boolean;
   saved: boolean;
   error: string;
@@ -28,14 +31,21 @@ const makeIdempotencyKey = () => `mini-${Date.now()}-${Math.random().toString(36
 export class ManualEntryPageModel {
   state: ManualEntryState = {
     direction: 'expense', amount: '', categoryId: '', categoryName: '',
-    occurredAt: new Date().toISOString().slice(0, 10), note: '', categories: [],
+    occurredAt: new Date().toISOString().slice(0, 10), note: '', merchant: '', categories: [], visibleCategories: [],
     loading: false, saved: false, error: '', duplicateDetails: null, duplicateActions: [],
   };
   private pendingPayload: Record<string, unknown> | null = null;
 
   constructor(private readonly api: ManualEntryApiPort, private readonly idFactory: () => string = makeIdempotencyKey) {}
 
-  setDirection(direction: 'income' | 'expense'): void { this.state.direction = direction; }
+  setDirection(direction: 'income' | 'expense'): void {
+    this.state.direction = direction;
+    this.refreshVisibleCategories();
+    if (!this.state.visibleCategories.some((category) => category.id === this.state.categoryId)) {
+      this.state.categoryId = '';
+      this.state.categoryName = '';
+    }
+  }
   setAmount(amount: string): void { this.state.amount = amount; }
   setCategory(categoryId: string): void { this.state.categoryId = categoryId; }
   setCategoryByIndex(index: number): void {
@@ -44,6 +54,7 @@ export class ManualEntryPageModel {
   }
   setDate(occurredAt: string): void { this.state.occurredAt = occurredAt; }
   setNote(note: string): void { this.state.note = note; }
+  setMerchant(merchant: string): void { this.state.merchant = merchant; }
 
   async load(): Promise<void> {
     if (!this.api.fetchCategories) return;
@@ -52,6 +63,7 @@ export class ManualEntryPageModel {
     try {
       const categories = await this.api.fetchCategories();
       this.state.categories = categories.filter((category) => category.active !== false);
+      this.refreshVisibleCategories();
     } catch (error) {
       this.state.error = error instanceof Error ? error.message : '加载分类失败';
     } finally {
@@ -60,6 +72,7 @@ export class ManualEntryPageModel {
   }
 
   async submit(): Promise<boolean> {
+    if (this.state.loading) return false;
     this.state.error = '';
     this.state.saved = false;
     let amountMinor: number;
@@ -74,8 +87,13 @@ export class ManualEntryPageModel {
       idempotencyKey: this.idFactory(),
     };
     if (this.state.categoryId) payload.categoryId = this.state.categoryId;
+    if (this.state.merchant.trim()) payload.merchant = this.state.merchant.trim();
     if (this.state.note.trim()) payload.note = this.state.note.trim();
     return this.send(payload);
+  }
+
+  private refreshVisibleCategories(): void {
+    this.state.visibleCategories = this.state.categories.filter((category) => category.direction === this.state.direction);
   }
 
   async chooseDuplicate(action: 'later' | 'keep-both'): Promise<boolean> {
@@ -120,6 +138,7 @@ interface PageContext { setData(data: unknown): void }
 export function createManualEntryPage(model: ManualEntryPageModel) {
   return {
     data: model.state,
+    close() { wx.navigateBack(); },
     async onLoad(this: PageContext) { await model.load(); this.setData(model.state); },
     onDirectionChange(this: PageContext, event: { currentTarget?: { dataset?: { value?: string } } }) {
       const direction = event.currentTarget?.dataset?.value;
@@ -127,7 +146,14 @@ export function createManualEntryPage(model: ManualEntryPageModel) {
       this.setData(model.state);
     },
     onAmountInput(this: PageContext, event: { detail?: { value?: string } }) { model.setAmount(event.detail?.value ?? ''); this.setData(model.state); },
+    onMerchantInput(this: PageContext, event: { detail?: { value?: string } }) { model.setMerchant(event.detail?.value ?? ''); this.setData(model.state); },
     onCategoryChange(this: PageContext, event: { detail?: { value?: number } }) { model.setCategoryByIndex(Number(event.detail?.value ?? -1)); this.setData(model.state); },
+    onCategoryTap(this: PageContext, event: { currentTarget?: { dataset?: { id?: string } } }) {
+      const id = event.currentTarget?.dataset?.id ?? '';
+      const category = model.state.visibleCategories.find((item) => item.id === id);
+      if (category) { model.setCategory(category.id); model.state.categoryName = category.name; }
+      this.setData(model.state);
+    },
     onDateChange(this: PageContext, event: { detail?: { value?: string } }) { model.setDate(event.detail?.value ?? ''); this.setData(model.state); },
     onNoteInput(this: PageContext, event: { detail?: { value?: string } }) { model.setNote(event.detail?.value ?? ''); this.setData(model.state); },
     async save(this: PageContext) { await model.submit(); this.setData(model.state); },
@@ -138,7 +164,8 @@ export function createManualEntryPage(model: ManualEntryPageModel) {
 
 declare function Page(options: Record<string, unknown>): void;
 declare function getApp<T>(): T;
+declare const wx: { navigateBack(): void };
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  Page(createManualEntryPage(new ManualEntryPageModel(runtime.api as unknown as ManualEntryApiPort)));
+  Page(withThemePage(createManualEntryPage(new ManualEntryPageModel(runtime.api as unknown as ManualEntryApiPort)), runtime.theme));
 }

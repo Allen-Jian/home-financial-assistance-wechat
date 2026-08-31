@@ -5,6 +5,7 @@ exports.createManualEntryPage = createManualEntryPage;
 const client_1 = require("../../../src/api/client");
 const money_1 = require("../../../src/domain/money");
 const app_1 = require("../../../app");
+const themed_page_1 = require("../../../src/shared/themed-page");
 const makeIdempotencyKey = () => `mini-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 class ManualEntryPageModel {
     constructor(api, idFactory = makeIdempotencyKey) {
@@ -12,12 +13,19 @@ class ManualEntryPageModel {
         this.idFactory = idFactory;
         this.state = {
             direction: 'expense', amount: '', categoryId: '', categoryName: '',
-            occurredAt: new Date().toISOString().slice(0, 10), note: '', categories: [],
+            occurredAt: new Date().toISOString().slice(0, 10), note: '', merchant: '', categories: [], visibleCategories: [],
             loading: false, saved: false, error: '', duplicateDetails: null, duplicateActions: [],
         };
         this.pendingPayload = null;
     }
-    setDirection(direction) { this.state.direction = direction; }
+    setDirection(direction) {
+        this.state.direction = direction;
+        this.refreshVisibleCategories();
+        if (!this.state.visibleCategories.some((category) => category.id === this.state.categoryId)) {
+            this.state.categoryId = '';
+            this.state.categoryName = '';
+        }
+    }
     setAmount(amount) { this.state.amount = amount; }
     setCategory(categoryId) { this.state.categoryId = categoryId; }
     setCategoryByIndex(index) {
@@ -29,6 +37,7 @@ class ManualEntryPageModel {
     }
     setDate(occurredAt) { this.state.occurredAt = occurredAt; }
     setNote(note) { this.state.note = note; }
+    setMerchant(merchant) { this.state.merchant = merchant; }
     async load() {
         if (!this.api.fetchCategories)
             return;
@@ -37,6 +46,7 @@ class ManualEntryPageModel {
         try {
             const categories = await this.api.fetchCategories();
             this.state.categories = categories.filter((category) => category.active !== false);
+            this.refreshVisibleCategories();
         }
         catch (error) {
             this.state.error = error instanceof Error ? error.message : '加载分类失败';
@@ -46,6 +56,8 @@ class ManualEntryPageModel {
         }
     }
     async submit() {
+        if (this.state.loading)
+            return false;
         this.state.error = '';
         this.state.saved = false;
         let amountMinor;
@@ -73,9 +85,14 @@ class ManualEntryPageModel {
         };
         if (this.state.categoryId)
             payload.categoryId = this.state.categoryId;
+        if (this.state.merchant.trim())
+            payload.merchant = this.state.merchant.trim();
         if (this.state.note.trim())
             payload.note = this.state.note.trim();
         return this.send(payload);
+    }
+    refreshVisibleCategories() {
+        this.state.visibleCategories = this.state.categories.filter((category) => category.direction === this.state.direction);
     }
     async chooseDuplicate(action) {
         if (action === 'later') {
@@ -120,6 +137,7 @@ exports.ManualEntryPageModel = ManualEntryPageModel;
 function createManualEntryPage(model) {
     return {
         data: model.state,
+        close() { wx.navigateBack(); },
         async onLoad() { await model.load(); this.setData(model.state); },
         onDirectionChange(event) {
             var _a, _b;
@@ -129,7 +147,18 @@ function createManualEntryPage(model) {
             this.setData(model.state);
         },
         onAmountInput(event) { var _a, _b; model.setAmount((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); this.setData(model.state); },
+        onMerchantInput(event) { var _a, _b; model.setMerchant((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); this.setData(model.state); },
         onCategoryChange(event) { var _a, _b; model.setCategoryByIndex(Number((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : -1)); this.setData(model.state); },
+        onCategoryTap(event) {
+            var _a, _b, _c;
+            const id = (_c = (_b = (_a = event.currentTarget) === null || _a === void 0 ? void 0 : _a.dataset) === null || _b === void 0 ? void 0 : _b.id) !== null && _c !== void 0 ? _c : '';
+            const category = model.state.visibleCategories.find((item) => item.id === id);
+            if (category) {
+                model.setCategory(category.id);
+                model.state.categoryName = category.name;
+            }
+            this.setData(model.state);
+        },
         onDateChange(event) { var _a, _b; model.setDate((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); this.setData(model.state); },
         onNoteInput(event) { var _a, _b; model.setNote((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); this.setData(model.state); },
         async save() { await model.submit(); this.setData(model.state); },
@@ -139,5 +168,5 @@ function createManualEntryPage(model) {
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
     const runtime = (0, app_1.getRuntime)();
-    Page(createManualEntryPage(new ManualEntryPageModel(runtime.api)));
+    Page((0, themed_page_1.withThemePage)(createManualEntryPage(new ManualEntryPageModel(runtime.api)), runtime.theme));
 }

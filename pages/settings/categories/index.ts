@@ -1,5 +1,6 @@
 import type { CategorySummary } from '../../../src/api/contracts';
 import { getRuntime } from '../../../app';
+import { withThemePage } from '../../../src/shared/themed-page';
 
 export type CategoryDirection = 'income' | 'expense';
 export interface CategorySettingsApiPort {
@@ -95,5 +96,5 @@ declare function Page(options: Record<string, unknown>): void;
 declare function getApp<T>(): T;
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  Page(createCategorySettingsPage(new CategorySettingsModel(runtime.api)));
+  Page(withThemePage(createCategorySettingsPage(new CategorySettingsModel(runtime.api)), runtime.theme));
 }
