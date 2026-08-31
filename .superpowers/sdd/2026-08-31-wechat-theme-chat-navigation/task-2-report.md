@@ -1,0 +1,32 @@
+# Task 2 report — unified themed pages
+
+Status: DONE_WITH_CONCERNS
+
+## RED evidence
+
+- `npm test -- tests/themed-pages.test.ts` failed before implementation: `src/shared/themed-page.ts` was missing and configured pages had no first-node `page-meta`.
+
+## GREEN evidence
+
+- `npm test -- tests/themed-pages.test.ts tests/build-artifacts.test.ts` — 8 tests passed.
+- `npm test -- --runInBand` — 28 suites, 126 tests passed.
+- `npm run typecheck` — passed.
+- `npm run build:wechat` — passed; generated JavaScript is present for the wrapper and themed pages.
+- `git diff --check` — passed with only existing LF/CRLF conversion warnings.
+
+## Implementation
+
+- Added `src/shared/themed-page.ts` and generated `src/shared/themed-page.js`.
+- Wrapped all 16 configured pages with the shared theme runtime while preserving existing `onLoad`, `onShow`, and `onUnload` handlers.
+- Added first-node `<page-meta page-style="{{themePageStyle}}" />` and root `{{themeClass}}` binding to every configured page.
+- Added explicit light/dark semantic token classes in `app.wxss` so a manual preference overrides the system media query.
+- Added lifecycle, page structure, and build artifact regression tests.
+
+## Commit
+
+- `49ecb86 feat: apply themes to mini program pages`
+
+## Concerns
+
+- The worktree contained pre-existing user-approved edits in several Task 2 page files; the required new commit includes the current contents of those same files. No unrelated paths were modified or cleaned.
+- Device-level verification of native navigation bars, overscroll backgrounds, and system theme switching remains pending.
