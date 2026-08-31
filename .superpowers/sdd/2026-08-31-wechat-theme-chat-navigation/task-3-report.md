@@ -125,4 +125,4 @@ npm test -- tests/settings-pages.test.ts -t "appearance|production more page|mar
 - `npm run build:wechat`：通过。
 - `git diff --check`：通过。
 
-修复轮次测试提交：待提交。
+修复轮次测试提交：`c783df2` — `test: enforce nested appearance warning markup`。
