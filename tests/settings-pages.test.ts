@@ -185,19 +185,30 @@ function appearanceSection(wxml: string): string {
   return source.slice(start, end);
 }
 
+function viewBoundary(source: string, className: string): { start: number; end: number } {
+  const start = source.indexOf(`<view class="${className}">`);
+  if (start < 0) throw new Error(`${className} is missing`);
+  const viewTag = /<\/?view(?:\s[^>]*)?>/g;
+  viewTag.lastIndex = start;
+  let depth = 0;
+  let match: RegExpExecArray | null;
+  while ((match = viewTag.exec(source))) {
+    depth += match[0].startsWith('</') ? -1 : 1;
+    if (depth === 0) return { start, end: match.index + match[0].length };
+  }
+  throw new Error(`${className} has no closing view`);
+}
+
 function assertAppearanceSelectorMarkup(wxml: string): void {
   const section = appearanceSection(wxml);
-  const controlStart = section.indexOf('<view class="appearance-control">');
-  const selectorStart = section.indexOf('<view class="appearance-selector">', controlStart);
+  const control = viewBoundary(section, 'appearance-control');
+  const selector = viewBoundary(section, 'appearance-selector');
   const warningNode = '<text wx:if="{{themePersistenceWarning}}" class="theme-persistence-warning">{{themePersistenceWarning}}</text>';
   const warningStart = section.indexOf(warningNode);
-  const controlEnd = warningStart < 0 ? -1 : section.indexOf('</view>', warningStart);
-  if (controlStart < 0 || selectorStart < 0 || warningStart < 0 || warningStart <= controlStart || controlEnd <= warningStart) {
+  if (warningStart < control.start || warningStart + warningNode.length > control.end) {
     throw new Error('appearance selector warning structure is missing');
   }
-  if (warningStart <= selectorStart) throw new Error('appearance warning must follow selector');
-  const selectorEnd = section.indexOf('</view><text wx:if="{{themePersistenceWarning}}"', selectorStart);
-  if (selectorEnd < 0 || warningStart <= selectorEnd) throw new Error('appearance warning is not after selector');
+  if (warningStart < selector.end) throw new Error('appearance warning must follow selector');
   if (section.includes('<navigator')) throw new Error('appearance selector must be inline');
   expect(section).toContain('wx:for="{{appearanceOptions}}"');
   expect(section).toContain('bindtap="onAppearanceSelect"');
@@ -212,4 +223,7 @@ test('appearance selector markup is structural and comment-safe', () => {
   const warningNode = '<text wx:if="{{themePersistenceWarning}}" class="theme-persistence-warning">{{themePersistenceWarning}}</text>';
   const mutated = wxml.replace(warningNode, '<!-- removed warning -->');
   expect(() => assertAppearanceSelectorMarkup(mutated)).toThrow();
+
+  const moved = wxml.replace(`${warningNode}</view></view><navigator url="/pages/reports/index"`, `</view>${warningNode}</view><navigator url="/pages/reports/index"`);
+  expect(() => assertAppearanceSelectorMarkup(moved)).toThrow();
 });

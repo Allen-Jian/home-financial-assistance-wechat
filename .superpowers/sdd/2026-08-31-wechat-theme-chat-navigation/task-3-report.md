@@ -108,3 +108,21 @@ npm test -- tests/settings-pages.test.ts -t "appearance|production more page|mar
 - `git diff --check`：通过。
 
 修复轮次测试提交：`812994c` — `test: harden appearance selector contract`。
+
+## Fix round 3
+
+本轮仅增强测试，不修改运行时或页面 UI：
+
+- warning 结构断言在解析前剥离注释，避免注释诱饵被误认作真实节点。
+- 使用最小平衡 `<view>` 标签扫描确定 `.appearance-control` 与 `.appearance-selector` 的真实边界；warning 必须是精确的 `text` 节点，带 `wx:if="{{themePersistenceWarning}}"`、warning class 和文本绑定，嵌套在控件内且位于 selector 之后。
+- 增加负向变异：将真实 warning 节点移动到 `.appearance-control` 外，断言必须失败；删除节点并保留注释诱饵的回归继续覆盖。
+
+验证结果：
+
+- Task 3/主题定向：2 suites / 27 tests 通过。
+- 全量 Jest：28 suites / 140 tests 通过。
+- `npm run typecheck`：通过。
+- `npm run build:wechat`：通过。
+- `git diff --check`：通过。
+
+修复轮次测试提交：待提交。
