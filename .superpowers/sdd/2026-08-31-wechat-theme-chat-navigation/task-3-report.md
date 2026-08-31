@@ -74,4 +74,4 @@ npm test -- tests/settings-pages.test.ts -t "appearance|production more page|mar
 - `npm run build:wechat`：通过。
 - `git diff --check`：通过。
 
-修复提交：待提交。
+修复提交：`335dd82` — `fix: validate appearance preferences and markup`。
