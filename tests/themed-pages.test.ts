@@ -16,7 +16,7 @@ const snapshot = {
 function rootAfterThemeMeta(wxml: string): { tag: string; classAttribute: string } | null {
   const afterMeta = wxml.trimStart().replace(/^<page-meta\s+page-style="\{\{themePageStyle\}\}"\s*\/>/, '').trimStart();
   const root = afterMeta.match(/^<([a-z][\w-]*)\b([^>]*)>/i);
-  const classAttribute = root?.[2].match(/\bclass\s*=\s*"([^"]*)"/i)?.[1] ?? '';
+  const classAttribute = root?.[2].match(/(?:^|\s)class\s*=\s*"([^"]*)"/i)?.[1] ?? '';
   return root ? { tag: root[1], classAttribute } : null;
 }
 
@@ -122,5 +122,10 @@ test('root theme assertion does not accept a nested-only themeClass binding', ()
 
 test('root theme assertion requires the class attribute itself', () => {
   const fixture = '<page-meta page-style="{{themePageStyle}}" /><view data-theme="{{themeClass}}" />';
+  expect(rootAfterThemeMeta(fixture)?.classAttribute).not.toContain('{{themeClass}}');
+});
+
+test('root theme assertion does not treat data-class as class', () => {
+  const fixture = '<page-meta page-style="{{themePageStyle}}" /><view data-class="{{themeClass}}" />';
   expect(rootAfterThemeMeta(fixture)?.classAttribute).not.toContain('{{themeClass}}');
 });
