@@ -82,3 +82,24 @@ test('clears tokens and private AI cache on logout', () => {
   expect(sessions.read()).toBeNull();
   expect(storage.getStorageSync(AI_CHAT_STORAGE_KEY)).toBeUndefined();
 });
+
+test('renders message bubbles with structured read-only assistant content', () => {
+  const { readFileSync } = require('node:fs') as typeof import('node:fs');
+  const { join } = require('node:path') as typeof import('node:path');
+  const repo = join(__dirname, '..');
+  const wxml = readFileSync(join(repo, 'pages/ai/index.wxml'), 'utf8');
+  const wxss = readFileSync(join(repo, 'pages/ai/index.wxss'), 'utf8');
+
+  expect(wxml).toMatch(/class="message-row \{\{item\.role\}\}"/);
+  expect(wxml).toMatch(/class="message-bubble"/);
+  expect(wxml).toMatch(/class="scope-row"/);
+  expect(wxml).toMatch(/class="insight-block"/);
+  expect(wxml).toMatch(/class="citation-row"/);
+  expect(wxml.indexOf('class="scope-row"')).toBeGreaterThan(wxml.indexOf('class="message-bubble"'));
+  expect(wxml.indexOf('class="insight-block"')).toBeGreaterThan(wxml.indexOf('class="message-bubble"'));
+  expect(wxml.indexOf('class="citation-row"')).toBeGreaterThan(wxml.indexOf('class="message-bubble"'));
+  expect(wxss).toMatch(/\.message-row\.user\s*\{[^}]*justify-content:\s*flex-end/);
+  expect(wxss).toMatch(/\.message-row\.assistant\s*\{[^}]*justify-content:\s*flex-start/);
+  expect(wxss).toMatch(/\.message-bubble\s*\{[^}]*max-width:\s*78%/);
+  expect(wxss).toMatch(/overflow-wrap:\s*anywhere/);
+});

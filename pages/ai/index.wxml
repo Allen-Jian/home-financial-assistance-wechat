@@ -4,11 +4,14 @@
   <scroll-view scroll-x class="suggestion-scroll"><view class="suggestions"><button wx:for="{{quickQuestions}}" wx:key="*this" bindtap="quickQuestion" data-question="{{item}}">{{item}}</button></view></scroll-view>
   <scroll-view scroll-y class="chat-list">
     <view wx:if="{{messages.length === 0}}" class="chat-empty"><view class="ai-orb"></view><text>想了解哪一段家庭收支？</text><text>可以问分类趋势、异常支出或两个时期的比较。</text></view>
-    <view wx:for="{{messages}}" wx:key="index" class="message {{item.role}}">
-      <view wx:if="{{item.role === 'assistant'}}" class="assistant-label"><view class="spark-icon"></view><text>账本助手</text></view><text class="message-content">{{item.content}}</text>
-      <view wx:for="{{item.insights}}" wx:key="title" class="insight-line"><text>{{item.title}}</text><text wx:if="{{item.value}}">{{item.value}} {{item.unit}}</text></view>
-      <text wx:if="{{item.scope}}" class="scope-line">分析范围：{{item.scope.from}} — {{item.scope.to}}</text>
-      <view wx:if="{{item.citations && item.citations.length}}" class="citation-list"><view wx:for="{{item.citations}}" wx:key="transactionId" class="citation-row"><view class="receipt-icon"></view><text>{{item.merchant || '未命名账目'}} · {{item.amountDisplay}}</text></view></view>
+    <view wx:for="{{messages}}" wx:key="index" class="message-row {{item.role}}">
+      <view class="message-bubble">
+        <view wx:if="{{item.role === 'assistant'}}" class="assistant-label"><view class="spark-icon"></view><text>账本助手</text></view>
+        <text class="message-content">{{item.content}}</text>
+        <view wx:if="{{item.scope}}" class="scope-row"><text>分析范围：</text><text>{{item.scope.from}} — {{item.scope.to}}</text></view>
+        <view wx:for="{{item.insights}}" wx:for-item="insight" wx:key="title" class="insight-block"><text>{{insight.title}}</text><text wx:if="{{insight.value || insight.value === 0}}">{{insight.value}} {{insight.unit}}</text><text wx:if="{{insight.detail}}">{{insight.detail}}</text></view>
+        <view wx:if="{{item.citations && item.citations.length}}" class="citation-list"><view wx:for="{{item.citations}}" wx:for-item="citation" wx:key="transactionId" class="citation-row"><view class="receipt-icon"></view><text>{{citation.merchant || '未命名账目'}} · {{citation.amountDisplay}}</text></view></view>
+      </view>
     </view>
     <view wx:if="{{loading}}" class="typing"><view></view><view></view><view></view></view>
   </scroll-view>
