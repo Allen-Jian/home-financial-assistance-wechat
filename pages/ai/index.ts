@@ -27,6 +27,30 @@ export interface AiPageState {
   notice: string;
   conversationId: string;
   draft: string;
+  keyboardHeightPx: number;
+  composerHeightPx: number;
+  composerBottomPx: number;
+  listBottomInsetPx: number;
+  scrollTarget: string;
+}
+
+const CHAT_END_ID = 'chat-end';
+const COMPOSER_GAP_PX = 8;
+const LIST_GAP_PX = 12;
+const CUSTOM_TAB_HEIGHT_PX = 64;
+
+function nonNegativeFinite(value: number, fallback = 0): number {
+  return Number.isFinite(value) ? Math.max(0, value) : fallback;
+}
+
+export function calculateChatInsets(keyboard: number, composer: number, safe: number): { composerBottomPx: number; listBottomInsetPx: number } {
+  const keyboardHeightPx = nonNegativeFinite(keyboard);
+  const composerHeightPx = nonNegativeFinite(composer);
+  const safeAreaBottomPx = nonNegativeFinite(safe);
+  const composerBottomPx = keyboardHeightPx > 0
+    ? keyboardHeightPx + COMPOSER_GAP_PX
+    : CUSTOM_TAB_HEIGHT_PX + safeAreaBottomPx + COMPOSER_GAP_PX;
+  return { composerBottomPx, listBottomInsetPx: composerBottomPx + composerHeightPx + LIST_GAP_PX };
 }
 
 function citationDisplay(citation: AiCitation): AiCitation & { amountDisplay: string; occurredAtDisplay?: string } {
@@ -57,7 +81,21 @@ export class AiPageModel {
     private readonly navigate: (route: string) => void,
     private readonly storage: StorageLike,
   ) {
-    this.state = { quickQuestions: QUICK_QUESTIONS, messages: this.readHistory(), loading: false, error: '', notice: copy.aiReadOnlyNotice, conversationId: '', draft: '' };
+    const composerHeightPx = 60;
+    const insets = calculateChatInsets(0, composerHeightPx, 0);
+    this.state = {
+      quickQuestions: QUICK_QUESTIONS,
+      messages: this.readHistory(),
+      loading: false,
+      error: '',
+      notice: copy.aiReadOnlyNotice,
+      conversationId: '',
+      draft: '',
+      keyboardHeightPx: 0,
+      composerHeightPx,
+      ...insets,
+      scrollTarget: '',
+    };
   }
 
   async hydrate(): Promise<void> {
@@ -145,12 +183,28 @@ export class AiPageModel {
 interface PageContext {
   setData(data: unknown): void;
   getTabBar?(): { setData(data: { selected: number }): void } | undefined;
+  createSelectorQuery?(): {
+    select(selector: string): {
+      boundingClientRect(callback: (rect: { height?: number } | Array<{ height?: number }> | null) => void): unknown;
+    };
+    exec(callback: (rects: Array<{ height?: number }>) => void): void;
+  };
+  __keyboardListener?: (result: { height?: number }) => void;
+  __safeAreaBottomPx?: number;
 }
 
 interface WxNetworkRuntime {
   getNetworkType(options: { success: (result: { networkType?: string }) => void; fail?: () => void }): void;
   onNetworkStatusChange?(listener: (result: { isConnected?: boolean; networkType?: string }) => void): void;
   reLaunch(options: { url: string }): void;
+  onKeyboardHeightChange?(listener: (result: { height?: number }) => void): void;
+  offKeyboardHeightChange?(listener: (result: { height?: number }) => void): void;
+  nextTick?(callback: () => void): void;
+  getSystemInfoSync?(): {
+    screenHeight?: number;
+    safeArea?: { bottom?: number };
+    safeAreaInsets?: { bottom?: number };
+  };
 }
 
 declare const wx: WxNetworkRuntime;
@@ -162,19 +216,127 @@ function createOnlineStatus(): () => boolean {
   return () => online;
 }
 
+function wxRuntime(): WxNetworkRuntime | undefined {
+  return typeof wx === 'undefined' ? undefined : wx;
+}
+
+function safeAreaBottomPx(): number {
+  const info = wxRuntime()?.getSystemInfoSync?.();
+  const inset = info?.safeAreaInsets?.bottom;
+  if (typeof inset === 'number' && Number.isFinite(inset)) return nonNegativeFinite(inset);
+  const safeBottom = info?.safeArea?.bottom;
+  if (typeof safeBottom !== 'number' || !Number.isFinite(safeBottom)) return 0;
+  if (typeof info?.screenHeight === 'number' && Number.isFinite(info.screenHeight)) {
+    return nonNegativeFinite(info.screenHeight - safeBottom);
+  }
+  return nonNegativeFinite(safeBottom);
+}
+
+function pageSafeArea(page: PageContext): void {
+  page.__safeAreaBottomPx ??= safeAreaBottomPx();
+}
+
+function applyChatInsets(model: AiPageModel, page: PageContext, keyboardHeightPx = model.state.keyboardHeightPx): void {
+  const insets = calculateChatInsets(keyboardHeightPx, model.state.composerHeightPx, page.__safeAreaBottomPx ?? 0);
+  model.state.keyboardHeightPx = nonNegativeFinite(keyboardHeightPx);
+  model.state.composerBottomPx = insets.composerBottomPx;
+  model.state.listBottomInsetPx = insets.listBottomInsetPx;
+  page.setData({ keyboardHeightPx: model.state.keyboardHeightPx, composerBottomPx: insets.composerBottomPx, listBottomInsetPx: insets.listBottomInsetPx });
+}
+
+function updateComposerHeight(model: AiPageModel, page: PageContext, height: number): void {
+  if (!Number.isFinite(height)) return;
+  model.state.composerHeightPx = nonNegativeFinite(height, model.state.composerHeightPx);
+  applyChatInsets(model, page);
+  scrollToChatEnd(model, page);
+}
+
+function scrollToChatEnd(model: AiPageModel, page: PageContext): void {
+  model.state.scrollTarget = '';
+  page.setData({ scrollTarget: '' });
+  const commit = () => {
+    model.state.scrollTarget = CHAT_END_ID;
+    page.setData({ scrollTarget: CHAT_END_ID });
+  };
+  const runtime = wxRuntime();
+  if (runtime?.nextTick) runtime.nextTick(commit);
+  else commit();
+}
+
+function measureComposer(model: AiPageModel, page: PageContext): void {
+  const query = page.createSelectorQuery?.();
+  if (!query) return;
+  const target = query.select('.composer');
+  let measured = false;
+  const applyMeasurement = (result: { height?: number } | Array<{ height?: number }> | null): void => {
+    const rect = Array.isArray(result) ? result[0] : result;
+    if (!rect || typeof rect.height !== 'number' || !Number.isFinite(rect.height)) return;
+    measured = true;
+    updateComposerHeight(model, page, rect.height);
+  };
+  target.boundingClientRect(applyMeasurement);
+  query.exec((rects) => { if (!measured) applyMeasurement(rects); });
+}
+
+function registerKeyboardListener(model: AiPageModel, page: PageContext): void {
+  const runtime = wxRuntime();
+  if (!runtime?.onKeyboardHeightChange || page.__keyboardListener) return;
+  page.__safeAreaBottomPx ??= safeAreaBottomPx();
+  const listener = (result: { height?: number }) => {
+    const keyboardHeightPx = typeof result?.height === 'number' && Number.isFinite(result.height) ? result.height : 0;
+    applyChatInsets(model, page, keyboardHeightPx);
+    measureComposer(model, page);
+    scrollToChatEnd(model, page);
+  };
+  page.__keyboardListener = listener;
+  runtime.onKeyboardHeightChange(listener);
+}
+
+function resetKeyboardListener(model: AiPageModel, page: PageContext): void {
+  const runtime = wxRuntime();
+  const listener = page.__keyboardListener;
+  if (listener) runtime?.offKeyboardHeightChange?.(listener);
+  page.__keyboardListener = undefined;
+  applyChatInsets(model, page, 0);
+}
+
+async function refreshAfterOperation(model: AiPageModel, page: PageContext, operation: () => Promise<unknown>): Promise<void> {
+  const pending = operation();
+  page.setData(model.state);
+  scrollToChatEnd(model, page);
+  await pending;
+  page.setData(model.state);
+  measureComposer(model, page);
+  scrollToChatEnd(model, page);
+}
+
 export function createAiPage(model: AiPageModel) {
   return {
     data: model.state,
     async onShow(this: PageContext) {
+      pageSafeArea(this);
+      registerKeyboardListener(model, this);
       this.getTabBar?.()?.setData({ selected: 3 });
       await model.hydrate();
       this.setData(model.state);
+      measureComposer(model, this);
+      scrollToChatEnd(model, this);
     },
-    async send(this: PageContext, event: { detail?: { value?: string } }) { await model.send(event.detail?.value ?? ''); this.setData(model.state); },
-    onInput(this: PageContext, event: { detail?: { value?: string } }) { model.setDraft(event.detail?.value ?? ''); this.setData(model.state); },
-    async sendCurrent(this: PageContext) { await model.sendCurrent(); this.setData(model.state); },
-    async quickQuestion(this: PageContext, event: { currentTarget?: { dataset?: { question?: string } } }) { await model.send(event.currentTarget?.dataset?.question ?? ''); this.setData(model.state); },
-    async deleteHistory(this: PageContext) { await model.deleteHistory(); this.setData(model.state); },
+    async send(this: PageContext, event: { detail?: { value?: string } }) { await refreshAfterOperation(model, this, () => model.send(event.detail?.value ?? '')); },
+    onInput(this: PageContext, event: { detail?: { value?: string } }) { model.setDraft(event.detail?.value ?? ''); this.setData(model.state); measureComposer(model, this); scrollToChatEnd(model, this); },
+    onComposerLineChange(this: PageContext, event?: { detail?: { height?: number } }) {
+      if (this.createSelectorQuery) measureComposer(model, this);
+      else if (typeof event?.detail?.height === 'number') updateComposerHeight(model, this, event.detail.height);
+    },
+    onComposerResize(this: PageContext, event?: { detail?: { height?: number } }) {
+      if (this.createSelectorQuery) measureComposer(model, this);
+      else if (typeof event?.detail?.height === 'number') updateComposerHeight(model, this, event.detail.height);
+    },
+    async sendCurrent(this: PageContext) { await refreshAfterOperation(model, this, () => model.sendCurrent()); },
+    async quickQuestion(this: PageContext, event: { currentTarget?: { dataset?: { question?: string } } }) { await refreshAfterOperation(model, this, () => model.send(event.currentTarget?.dataset?.question ?? '')); },
+    async deleteHistory(this: PageContext) { await model.deleteHistory(); this.setData(model.state); scrollToChatEnd(model, this); },
+    onHide(this: PageContext) { resetKeyboardListener(model, this); },
+    onUnload(this: PageContext) { resetKeyboardListener(model, this); },
   };
 }
 

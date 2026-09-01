@@ -1,5 +1,5 @@
 import { ApiError } from '../src/api/client';
-import { AiPageModel, createAiPage, QUICK_QUESTIONS } from '../pages/ai/index';
+import { AiPageModel, calculateChatInsets, createAiPage, QUICK_QUESTIONS } from '../pages/ai/index';
 import { SessionStore, type StorageLike } from '../src/auth/session-store';
 import { clearPrivateSession } from '../app';
 import { AI_CHAT_STORAGE_KEY } from '../src/shared/copy';
@@ -19,6 +19,72 @@ const answer = {
 
 test('exposes the three read-only quick questions', () => {
   expect(QUICK_QUESTIONS).toEqual(['本月花最多的分类？', '找出异常支出', '比较本季与上季']);
+});
+
+test('calculates composer and list insets above the keyboard or custom tab bar', () => {
+  expect(calculateChatInsets(280, 96, 24)).toEqual({ composerBottomPx: 288, listBottomInsetPx: 396 });
+  expect(calculateChatInsets(0, 96, 24)).toEqual({ composerBottomPx: 96, listBottomInsetPx: 204 });
+});
+
+test('registers one keyboard listener and resets it on hide and unload', async () => {
+  const listeners: Array<(result: { height?: number }) => void> = [];
+  const offKeyboardHeightChange = jest.fn();
+  const previousWx = (globalThis as { wx?: unknown }).wx;
+  (globalThis as { wx?: unknown }).wx = {
+    onKeyboardHeightChange: jest.fn((listener: (result: { height?: number }) => void) => listeners.push(listener)),
+    offKeyboardHeightChange,
+    nextTick: (callback: () => void) => callback(),
+    getSystemInfoSync: () => ({ safeArea: { bottom: 24 } }),
+  };
+  try {
+    const model = new AiPageModel({ askAi: jest.fn() }, () => true, jest.fn(), new MemoryStorage());
+    const page = createAiPage(model);
+    const context = { setData: jest.fn(), getTabBar: jest.fn() };
+
+    await page.onShow.call(context);
+    await page.onShow.call(context);
+    expect(listeners).toHaveLength(1);
+
+    listeners[0]({ height: 280 });
+    expect(model.state.keyboardHeightPx).toBe(280);
+    expect(model.state.composerBottomPx).toBe(288);
+
+    page.onHide.call(context);
+    expect(offKeyboardHeightChange).toHaveBeenCalledTimes(1);
+    expect(model.state.keyboardHeightPx).toBe(0);
+    page.onUnload.call(context);
+    expect(offKeyboardHeightChange).toHaveBeenCalledTimes(1);
+  } finally {
+    (globalThis as { wx?: unknown }).wx = previousWx;
+  }
+});
+
+test('measures composer changes and scrolls to the stable chat end anchor', async () => {
+  const previousWx = (globalThis as { wx?: unknown }).wx;
+  (globalThis as { wx?: unknown }).wx = { nextTick: (callback: () => void) => callback(), getSystemInfoSync: () => ({ safeArea: { bottom: 0 } }) };
+  try {
+    const model = new AiPageModel({ askAi: jest.fn().mockResolvedValue(answer) }, () => true, jest.fn(), new MemoryStorage());
+    const page = createAiPage(model);
+    const setData = jest.fn();
+    const query = {
+      select: jest.fn().mockReturnThis(),
+      boundingClientRect: jest.fn().mockReturnThis(),
+      exec: jest.fn((callback: (rects: Array<{ height: number }>) => void) => callback([{ height: 144 }])),
+    };
+    const context = { setData, createSelectorQuery: jest.fn(() => query), getTabBar: jest.fn() };
+
+    await page.onShow.call(context);
+    page.onComposerLineChange.call(context, { detail: { height: 200 } });
+    expect(model.state.composerHeightPx).toBe(144);
+    expect(model.state.listBottomInsetPx).toBe(228);
+    expect(setData).toHaveBeenCalledWith(expect.objectContaining({ scrollTarget: '' }));
+    expect(setData).toHaveBeenCalledWith(expect.objectContaining({ scrollTarget: 'chat-end' }));
+
+    await page.sendCurrent.call(context);
+    expect(setData).toHaveBeenCalledWith(expect.objectContaining({ scrollTarget: 'chat-end' }));
+  } finally {
+    (globalThis as { wx?: unknown }).wx = previousWx;
+  }
 });
 
 test('renders an answer with scope and transaction citations', async () => {

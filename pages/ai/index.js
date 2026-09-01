@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AiPageModel = exports.QUICK_QUESTIONS = void 0;
+exports.calculateChatInsets = calculateChatInsets;
 exports.createAiPage = createAiPage;
 const client_1 = require("../../src/api/client");
 const copy_1 = require("../../src/shared/copy");
@@ -8,6 +9,22 @@ const app_1 = require("../../app");
 const money_1 = require("../../src/domain/money");
 const themed_page_1 = require("../../src/shared/themed-page");
 exports.QUICK_QUESTIONS = ['本月花最多的分类？', '找出异常支出', '比较本季与上季'];
+const CHAT_END_ID = 'chat-end';
+const COMPOSER_GAP_PX = 8;
+const LIST_GAP_PX = 12;
+const CUSTOM_TAB_HEIGHT_PX = 64;
+function nonNegativeFinite(value, fallback = 0) {
+    return Number.isFinite(value) ? Math.max(0, value) : fallback;
+}
+function calculateChatInsets(keyboard, composer, safe) {
+    const keyboardHeightPx = nonNegativeFinite(keyboard);
+    const composerHeightPx = nonNegativeFinite(composer);
+    const safeAreaBottomPx = nonNegativeFinite(safe);
+    const composerBottomPx = keyboardHeightPx > 0
+        ? keyboardHeightPx + COMPOSER_GAP_PX
+        : CUSTOM_TAB_HEIGHT_PX + safeAreaBottomPx + COMPOSER_GAP_PX;
+    return { composerBottomPx, listBottomInsetPx: composerBottomPx + composerHeightPx + LIST_GAP_PX };
+}
 function citationDisplay(citation) {
     const occurredAt = typeof citation.occurredAt === 'string' ? citation.occurredAt : '';
     const date = occurredAt ? new Date(occurredAt) : null;
@@ -32,7 +49,21 @@ class AiPageModel {
         this.isOnline = isOnline;
         this.navigate = navigate;
         this.storage = storage;
-        this.state = { quickQuestions: exports.QUICK_QUESTIONS, messages: this.readHistory(), loading: false, error: '', notice: copy_1.copy.aiReadOnlyNotice, conversationId: '', draft: '' };
+        const composerHeightPx = 60;
+        const insets = calculateChatInsets(0, composerHeightPx, 0);
+        this.state = {
+            quickQuestions: exports.QUICK_QUESTIONS,
+            messages: this.readHistory(),
+            loading: false,
+            error: '',
+            notice: copy_1.copy.aiReadOnlyNotice,
+            conversationId: '',
+            draft: '',
+            keyboardHeightPx: 0,
+            composerHeightPx,
+            ...insets,
+            scrollTarget: '',
+        };
     }
     async hydrate() {
         if (!this.isOnline() || !this.api.listAiConversations)
@@ -142,20 +173,140 @@ function createOnlineStatus() {
     (_a = wx.onNetworkStatusChange) === null || _a === void 0 ? void 0 : _a.call(wx, (result) => { online = result.isConnected !== false && result.networkType !== 'none'; });
     return () => online;
 }
+function wxRuntime() {
+    return typeof wx === 'undefined' ? undefined : wx;
+}
+function safeAreaBottomPx() {
+    var _a, _b, _c, _d;
+    const info = (_b = (_a = wxRuntime()) === null || _a === void 0 ? void 0 : _a.getSystemInfoSync) === null || _b === void 0 ? void 0 : _b.call(_a);
+    const inset = (_c = info === null || info === void 0 ? void 0 : info.safeAreaInsets) === null || _c === void 0 ? void 0 : _c.bottom;
+    if (typeof inset === 'number' && Number.isFinite(inset))
+        return nonNegativeFinite(inset);
+    const safeBottom = (_d = info === null || info === void 0 ? void 0 : info.safeArea) === null || _d === void 0 ? void 0 : _d.bottom;
+    if (typeof safeBottom !== 'number' || !Number.isFinite(safeBottom))
+        return 0;
+    if (typeof (info === null || info === void 0 ? void 0 : info.screenHeight) === 'number' && Number.isFinite(info.screenHeight)) {
+        return nonNegativeFinite(info.screenHeight - safeBottom);
+    }
+    return nonNegativeFinite(safeBottom);
+}
+function pageSafeArea(page) {
+    var _a;
+    (_a = page.__safeAreaBottomPx) !== null && _a !== void 0 ? _a : (page.__safeAreaBottomPx = safeAreaBottomPx());
+}
+function applyChatInsets(model, page, keyboardHeightPx = model.state.keyboardHeightPx) {
+    var _a;
+    const insets = calculateChatInsets(keyboardHeightPx, model.state.composerHeightPx, (_a = page.__safeAreaBottomPx) !== null && _a !== void 0 ? _a : 0);
+    model.state.keyboardHeightPx = nonNegativeFinite(keyboardHeightPx);
+    model.state.composerBottomPx = insets.composerBottomPx;
+    model.state.listBottomInsetPx = insets.listBottomInsetPx;
+    page.setData({ keyboardHeightPx: model.state.keyboardHeightPx, composerBottomPx: insets.composerBottomPx, listBottomInsetPx: insets.listBottomInsetPx });
+}
+function updateComposerHeight(model, page, height) {
+    if (!Number.isFinite(height))
+        return;
+    model.state.composerHeightPx = nonNegativeFinite(height, model.state.composerHeightPx);
+    applyChatInsets(model, page);
+    scrollToChatEnd(model, page);
+}
+function scrollToChatEnd(model, page) {
+    model.state.scrollTarget = '';
+    page.setData({ scrollTarget: '' });
+    const commit = () => {
+        model.state.scrollTarget = CHAT_END_ID;
+        page.setData({ scrollTarget: CHAT_END_ID });
+    };
+    const runtime = wxRuntime();
+    if (runtime === null || runtime === void 0 ? void 0 : runtime.nextTick)
+        runtime.nextTick(commit);
+    else
+        commit();
+}
+function measureComposer(model, page) {
+    var _a;
+    const query = (_a = page.createSelectorQuery) === null || _a === void 0 ? void 0 : _a.call(page);
+    if (!query)
+        return;
+    const target = query.select('.composer');
+    let measured = false;
+    const applyMeasurement = (result) => {
+        const rect = Array.isArray(result) ? result[0] : result;
+        if (!rect || typeof rect.height !== 'number' || !Number.isFinite(rect.height))
+            return;
+        measured = true;
+        updateComposerHeight(model, page, rect.height);
+    };
+    target.boundingClientRect(applyMeasurement);
+    query.exec((rects) => { if (!measured)
+        applyMeasurement(rects); });
+}
+function registerKeyboardListener(model, page) {
+    var _a;
+    const runtime = wxRuntime();
+    if (!(runtime === null || runtime === void 0 ? void 0 : runtime.onKeyboardHeightChange) || page.__keyboardListener)
+        return;
+    (_a = page.__safeAreaBottomPx) !== null && _a !== void 0 ? _a : (page.__safeAreaBottomPx = safeAreaBottomPx());
+    const listener = (result) => {
+        const keyboardHeightPx = typeof (result === null || result === void 0 ? void 0 : result.height) === 'number' && Number.isFinite(result.height) ? result.height : 0;
+        applyChatInsets(model, page, keyboardHeightPx);
+        measureComposer(model, page);
+        scrollToChatEnd(model, page);
+    };
+    page.__keyboardListener = listener;
+    runtime.onKeyboardHeightChange(listener);
+}
+function resetKeyboardListener(model, page) {
+    var _a;
+    const runtime = wxRuntime();
+    const listener = page.__keyboardListener;
+    if (listener)
+        (_a = runtime === null || runtime === void 0 ? void 0 : runtime.offKeyboardHeightChange) === null || _a === void 0 ? void 0 : _a.call(runtime, listener);
+    page.__keyboardListener = undefined;
+    applyChatInsets(model, page, 0);
+}
+async function refreshAfterOperation(model, page, operation) {
+    const pending = operation();
+    page.setData(model.state);
+    scrollToChatEnd(model, page);
+    await pending;
+    page.setData(model.state);
+    measureComposer(model, page);
+    scrollToChatEnd(model, page);
+}
 function createAiPage(model) {
     return {
         data: model.state,
         async onShow() {
             var _a, _b;
+            pageSafeArea(this);
+            registerKeyboardListener(model, this);
             (_b = (_a = this.getTabBar) === null || _a === void 0 ? void 0 : _a.call(this)) === null || _b === void 0 ? void 0 : _b.setData({ selected: 3 });
             await model.hydrate();
             this.setData(model.state);
+            measureComposer(model, this);
+            scrollToChatEnd(model, this);
         },
-        async send(event) { var _a, _b; await model.send((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); this.setData(model.state); },
-        onInput(event) { var _a, _b; model.setDraft((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); this.setData(model.state); },
-        async sendCurrent() { await model.sendCurrent(); this.setData(model.state); },
-        async quickQuestion(event) { var _a, _b, _c; await model.send((_c = (_b = (_a = event.currentTarget) === null || _a === void 0 ? void 0 : _a.dataset) === null || _b === void 0 ? void 0 : _b.question) !== null && _c !== void 0 ? _c : ''); this.setData(model.state); },
-        async deleteHistory() { await model.deleteHistory(); this.setData(model.state); },
+        async send(event) { await refreshAfterOperation(model, this, () => { var _a, _b; return model.send((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); }); },
+        onInput(event) { var _a, _b; model.setDraft((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); this.setData(model.state); measureComposer(model, this); scrollToChatEnd(model, this); },
+        onComposerLineChange(event) {
+            var _a;
+            if (this.createSelectorQuery)
+                measureComposer(model, this);
+            else if (typeof ((_a = event === null || event === void 0 ? void 0 : event.detail) === null || _a === void 0 ? void 0 : _a.height) === 'number')
+                updateComposerHeight(model, this, event.detail.height);
+        },
+        onComposerResize(event) {
+            var _a;
+            if (this.createSelectorQuery)
+                measureComposer(model, this);
+            else if (typeof ((_a = event === null || event === void 0 ? void 0 : event.detail) === null || _a === void 0 ? void 0 : _a.height) === 'number')
+                updateComposerHeight(model, this, event.detail.height);
+        },
+        async sendCurrent() { await refreshAfterOperation(model, this, () => model.sendCurrent()); },
+        async quickQuestion(event) { await refreshAfterOperation(model, this, () => { var _a, _b, _c; return model.send((_c = (_b = (_a = event.currentTarget) === null || _a === void 0 ? void 0 : _a.dataset) === null || _b === void 0 ? void 0 : _b.question) !== null && _c !== void 0 ? _c : ''); }); },
+        async deleteHistory() { await model.deleteHistory(); this.setData(model.state); scrollToChatEnd(model, this); },
+        onHide() { resetKeyboardListener(model, this); },
+        onUnload() { resetKeyboardListener(model, this); },
     };
 }
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {

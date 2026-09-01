@@ -2,7 +2,7 @@
 <view class="page ai-page {{themeClass}}">
   <view class="ai-header"><view><text class="ai-title">AI 账本助手</text><text class="ai-notice"><text class="shield-dot">✓</text>{{notice}}</text></view><button class="clear-chat" bindtap="deleteHistory">清空</button></view>
   <scroll-view scroll-x class="suggestion-scroll"><view class="suggestions"><button wx:for="{{quickQuestions}}" wx:key="*this" bindtap="quickQuestion" data-question="{{item}}">{{item}}</button></view></scroll-view>
-  <scroll-view scroll-y class="chat-list">
+  <scroll-view scroll-y class="chat-list" scroll-into-view="{{scrollTarget}}" style="padding-bottom: {{listBottomInsetPx}}px;">
     <view wx:if="{{messages.length === 0}}" class="chat-empty"><view class="ai-orb"></view><text>想了解哪一段家庭收支？</text><text>可以问分类趋势、异常支出或两个时期的比较。</text></view>
     <view wx:for="{{messages}}" wx:key="index" class="message-row {{item.role}}">
       <view class="message-bubble">
@@ -14,7 +14,8 @@
       </view>
     </view>
     <view wx:if="{{loading}}" class="typing"><view></view><view></view><view></view></view>
+    <view id="chat-end" class="chat-end"></view>
   </scroll-view>
   <text wx:if="{{error}}" class="page-error">{{error}}</text>
-  <view class="composer focus-surface"><textarea auto-height maxlength="500" placeholder="问问家庭账本" value="{{draft}}" bindinput="onInput"></textarea><button bindtap="sendCurrent" loading="{{loading}}" aria-label="发送问题">↑</button></view>
+  <view class="composer focus-surface" style="bottom: {{composerBottomPx}}px;"><textarea auto-height adjust-position="{{false}}" maxlength="500" placeholder="问问家庭账本" value="{{draft}}" bindinput="onInput" bindlinechange="onComposerLineChange"></textarea><button bindtap="sendCurrent" loading="{{loading}}" aria-label="发送问题">↑</button></view>
 </view>
