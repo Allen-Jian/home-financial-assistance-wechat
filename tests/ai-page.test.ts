@@ -1,5 +1,6 @@
 import { ApiError } from '../src/api/client';
 import { AiPageModel, calculateChatInsets, createAiPage, QUICK_QUESTIONS } from '../pages/ai/index';
+import type { AiConversationSummary } from '../src/api/contracts';
 import { SessionStore, type StorageLike } from '../src/auth/session-store';
 import { clearPrivateSession } from '../app';
 import { AI_CHAT_STORAGE_KEY } from '../src/shared/copy';
@@ -22,8 +23,10 @@ test('exposes the three read-only quick questions', () => {
 });
 
 test('calculates composer and list insets above the keyboard or custom tab bar', () => {
-  expect(calculateChatInsets(280, 96, 24)).toEqual({ composerBottomPx: 288, listBottomInsetPx: 396 });
-  expect(calculateChatInsets(0, 96, 24)).toEqual({ composerBottomPx: 96, listBottomInsetPx: 204 });
+  expect(calculateChatInsets(280, 96, 24, 320)).toEqual({ composerBottomPx: 288, listBottomInsetPx: 396 });
+  expect(calculateChatInsets(0, 96, 24, 320)).toEqual({ composerBottomPx: 79.78666666666666, listBottomInsetPx: 187.78666666666666 });
+  expect(calculateChatInsets(0, 96, 24, 375).composerBottomPx).toBeCloseTo(88, 8);
+  expect(calculateChatInsets(0, 96, 24, 428).composerBottomPx).toBeCloseTo(95.91466666666667, 8);
 });
 
 test('registers one keyboard listener and resets it on hide and unload', async () => {
@@ -48,6 +51,9 @@ test('registers one keyboard listener and resets it on hide and unload', async (
     listeners[0]({ height: 280 });
     expect(model.state.keyboardHeightPx).toBe(280);
     expect(model.state.composerBottomPx).toBe(288);
+    listeners[0]({ height: 0 });
+    expect(model.state.keyboardHeightPx).toBe(0);
+    expect(model.state.composerBottomPx).toBe(88);
 
     page.onHide.call(context);
     expect(offKeyboardHeightChange).toHaveBeenCalledTimes(1);
@@ -76,7 +82,7 @@ test('measures composer changes and scrolls to the stable chat end anchor', asyn
     await page.onShow.call(context);
     page.onComposerLineChange.call(context, { detail: { height: 200 } });
     expect(model.state.composerHeightPx).toBe(144);
-    expect(model.state.listBottomInsetPx).toBe(228);
+    expect(model.state.listBottomInsetPx).toBe(220);
     expect(setData).toHaveBeenCalledWith(expect.objectContaining({ scrollTarget: '' }));
     expect(setData).toHaveBeenCalledWith(expect.objectContaining({ scrollTarget: 'chat-end' }));
 
@@ -85,6 +91,116 @@ test('measures composer changes and scrolls to the stable chat end anchor', asyn
   } finally {
     (globalThis as { wx?: unknown }).wx = previousWx;
   }
+});
+
+test('applies safe-area metrics before unresolved history hydration and scrolls cached history first', async () => {
+  const storage = new MemoryStorage();
+  storage.setStorageSync(AI_CHAT_STORAGE_KEY, JSON.stringify([{ role: 'user', content: '缓存问题' }]));
+  let resolveHistory!: (value: AiConversationSummary[]) => void;
+  const api = {
+    askAi: jest.fn(),
+    listAiConversations: jest.fn(() => new Promise<AiConversationSummary[]>((resolve) => { resolveHistory = resolve; })),
+  };
+  const nextTicks: Array<() => void> = [];
+  const previousWx = (globalThis as { wx?: unknown }).wx;
+  (globalThis as { wx?: unknown }).wx = {
+    nextTick: (callback: () => void) => nextTicks.push(callback),
+    getSystemInfoSync: () => ({ screenHeight: 800, windowWidth: 320, safeArea: { bottom: 760 } }),
+  };
+  try {
+    const model = new AiPageModel(api, () => true, jest.fn(), storage);
+    const page = createAiPage(model);
+    const setData = jest.fn();
+    const context = { setData, getTabBar: jest.fn() };
+    const pending = page.onShow.call(context);
+    await Promise.resolve();
+
+    expect(setData).toHaveBeenNthCalledWith(1, expect.objectContaining({ composerBottomPx: expect.closeTo(47.7866666667 + 40 + 8, 8) }));
+    expect(setData).toHaveBeenCalledWith(expect.objectContaining({ scrollTarget: '' }));
+    expect(nextTicks).toHaveLength(1);
+    nextTicks.shift()?.();
+    expect(setData).toHaveBeenCalledWith(expect.objectContaining({ scrollTarget: 'chat-end' }));
+
+    resolveHistory([]);
+    await pending;
+  } finally {
+    (globalThis as { wx?: unknown }).wx = previousWx;
+  }
+});
+
+test('ignores queued nextTick and selector callbacks after hide or unload', async () => {
+  const nextTicks: Array<() => void> = [];
+  let selectorCallback: ((rects: Array<{ height?: number }>) => void) | undefined;
+  const previousWx = (globalThis as { wx?: unknown }).wx;
+  (globalThis as { wx?: unknown }).wx = {
+    nextTick: (callback: () => void) => nextTicks.push(callback),
+    getSystemInfoSync: () => ({ screenHeight: 800, windowWidth: 375, safeArea: { bottom: 760 } }),
+  };
+  try {
+    const model = new AiPageModel({ askAi: jest.fn() }, () => true, jest.fn(), new MemoryStorage());
+    const page = createAiPage(model);
+    const setData = jest.fn();
+    const query = {
+      select: jest.fn().mockReturnThis(),
+      boundingClientRect: jest.fn().mockReturnThis(),
+      exec: jest.fn((callback: (rects: Array<{ height?: number }>) => void) => { selectorCallback = callback; }),
+    };
+    const context = { setData, createSelectorQuery: jest.fn(() => query), getTabBar: jest.fn() };
+
+    await page.onShow.call(context);
+    page.onHide.call(context);
+    const callsAfterHide = setData.mock.calls.length;
+    nextTicks.splice(0).forEach((callback) => callback());
+    selectorCallback?.([{ height: 180 }]);
+    expect(setData).toHaveBeenCalledTimes(callsAfterHide);
+
+    await page.onShow.call(context);
+    page.onUnload.call(context);
+    const callsAfterUnload = setData.mock.calls.length;
+    nextTicks.splice(0).forEach((callback) => callback());
+    selectorCallback?.([{ height: 200 }]);
+    expect(setData).toHaveBeenCalledTimes(callsAfterUnload);
+  } finally {
+    (globalThis as { wx?: unknown }).wx = previousWx;
+  }
+});
+
+test('bounds the AI viewport and uses one dynamic list inset source', () => {
+  const { readFileSync } = require('node:fs') as typeof import('node:fs');
+  const { join } = require('node:path') as typeof import('node:path');
+  const repo = join(__dirname, '..');
+  const wxml = readFileSync(join(repo, 'pages/ai/index.wxml'), 'utf8');
+  const wxss = readFileSync(join(repo, 'pages/ai/index.wxss'), 'utf8');
+
+  expect(wxml).toMatch(/<textarea[^>]*auto-height[^>]*adjust-position="\{\{false\}\}"/);
+  expect(wxml).toMatch(/scroll-into-view="\{\{scrollTarget\}\}"/);
+  expect(wxml).toMatch(/id="chat-end"/);
+  expect(wxss).toMatch(/\.ai-page\s*\{[^}]*height:\s*100vh[^}]*min-height:\s*0[^}]*overflow:\s*hidden/s);
+  expect(wxss).toMatch(/\.chat-list\s*\{[^}]*flex:\s*1[^}]*min-height:\s*0/s);
+  expect(wxss).not.toMatch(/\.ai-page\s*\{[^}]*padding-bottom:\s*calc\(/s);
+  expect(wxss).not.toMatch(/\.chat-list\s*\{[^}]*height:\s*calc\(100vh/s);
+});
+
+test('renders the submitted user message, assistant response, and error transition', async () => {
+  const api = {
+    askAi: jest.fn()
+      .mockResolvedValueOnce({ ...answer, citations: [], insights: [] })
+      .mockRejectedValueOnce(new ApiError(0, 'timeout', 'request timed out')),
+  };
+  const model = new AiPageModel(api, () => true, jest.fn(), new MemoryStorage());
+  const page = createAiPage(model);
+  const context = { setData: jest.fn(), getTabBar: jest.fn() };
+
+  await page.send.call(context, { detail: { value: '本月花最多的分类？' } });
+  expect(model.state.messages).toEqual([
+    expect.objectContaining({ role: 'user', content: '本月花最多的分类？' }),
+    expect.objectContaining({ role: 'assistant', content: answer.answer }),
+  ]);
+  await page.send.call(context, { detail: { value: '再比较上个月' } });
+  expect(model.state.messages).toEqual(expect.arrayContaining([
+    expect.objectContaining({ role: 'user', content: '再比较上个月' }),
+  ]));
+  expect(model.state.error).toContain('超时');
 });
 
 test('renders an answer with scope and transaction citations', async () => {

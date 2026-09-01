@@ -37,19 +37,22 @@ export interface AiPageState {
 const CHAT_END_ID = 'chat-end';
 const COMPOSER_GAP_PX = 8;
 const LIST_GAP_PX = 12;
-const CUSTOM_TAB_HEIGHT_PX = 64;
+const CUSTOM_TAB_HEIGHT_RPX = 112;
+const DEFAULT_WINDOW_WIDTH_PX = 375;
 
 function nonNegativeFinite(value: number, fallback = 0): number {
   return Number.isFinite(value) ? Math.max(0, value) : fallback;
 }
 
-export function calculateChatInsets(keyboard: number, composer: number, safe: number): { composerBottomPx: number; listBottomInsetPx: number } {
+export function calculateChatInsets(keyboard: number, composer: number, safe: number, windowWidth = DEFAULT_WINDOW_WIDTH_PX): { composerBottomPx: number; listBottomInsetPx: number } {
   const keyboardHeightPx = nonNegativeFinite(keyboard);
   const composerHeightPx = nonNegativeFinite(composer);
   const safeAreaBottomPx = nonNegativeFinite(safe);
+  const windowWidthPx = nonNegativeFinite(windowWidth, DEFAULT_WINDOW_WIDTH_PX);
+  const customTabHeightPx = CUSTOM_TAB_HEIGHT_RPX * windowWidthPx / 750;
   const composerBottomPx = keyboardHeightPx > 0
     ? keyboardHeightPx + COMPOSER_GAP_PX
-    : CUSTOM_TAB_HEIGHT_PX + safeAreaBottomPx + COMPOSER_GAP_PX;
+    : customTabHeightPx + safeAreaBottomPx + COMPOSER_GAP_PX;
   return { composerBottomPx, listBottomInsetPx: composerBottomPx + composerHeightPx + LIST_GAP_PX };
 }
 
@@ -82,7 +85,7 @@ export class AiPageModel {
     private readonly storage: StorageLike,
   ) {
     const composerHeightPx = 60;
-    const insets = calculateChatInsets(0, composerHeightPx, 0);
+    const insets = calculateChatInsets(0, composerHeightPx, 0, DEFAULT_WINDOW_WIDTH_PX);
     this.state = {
       quickQuestions: QUICK_QUESTIONS,
       messages: this.readHistory(),
@@ -191,6 +194,9 @@ interface PageContext {
   };
   __keyboardListener?: (result: { height?: number }) => void;
   __safeAreaBottomPx?: number;
+  __windowWidthPx?: number;
+  __lifecycleGeneration?: number;
+  __active?: boolean;
 }
 
 interface WxNetworkRuntime {
@@ -202,6 +208,7 @@ interface WxNetworkRuntime {
   nextTick?(callback: () => void): void;
   getSystemInfoSync?(): {
     screenHeight?: number;
+    windowWidth?: number;
     safeArea?: { bottom?: number };
     safeAreaInsets?: { bottom?: number };
   };
@@ -220,24 +227,26 @@ function wxRuntime(): WxNetworkRuntime | undefined {
   return typeof wx === 'undefined' ? undefined : wx;
 }
 
-function safeAreaBottomPx(): number {
+function viewportMetrics(): { safeAreaBottomPx: number; windowWidthPx: number } {
   const info = wxRuntime()?.getSystemInfoSync?.();
   const inset = info?.safeAreaInsets?.bottom;
-  if (typeof inset === 'number' && Number.isFinite(inset)) return nonNegativeFinite(inset);
+  if (typeof inset === 'number' && Number.isFinite(inset)) return { safeAreaBottomPx: nonNegativeFinite(inset), windowWidthPx: nonNegativeFinite(info?.windowWidth ?? DEFAULT_WINDOW_WIDTH_PX, DEFAULT_WINDOW_WIDTH_PX) };
   const safeBottom = info?.safeArea?.bottom;
-  if (typeof safeBottom !== 'number' || !Number.isFinite(safeBottom)) return 0;
+  if (typeof safeBottom !== 'number' || !Number.isFinite(safeBottom)) return { safeAreaBottomPx: 0, windowWidthPx: nonNegativeFinite(info?.windowWidth ?? DEFAULT_WINDOW_WIDTH_PX, DEFAULT_WINDOW_WIDTH_PX) };
   if (typeof info?.screenHeight === 'number' && Number.isFinite(info.screenHeight)) {
-    return nonNegativeFinite(info.screenHeight - safeBottom);
+    return { safeAreaBottomPx: nonNegativeFinite(info.screenHeight - safeBottom), windowWidthPx: nonNegativeFinite(info?.windowWidth ?? DEFAULT_WINDOW_WIDTH_PX, DEFAULT_WINDOW_WIDTH_PX) };
   }
-  return nonNegativeFinite(safeBottom);
+  return { safeAreaBottomPx: nonNegativeFinite(safeBottom), windowWidthPx: nonNegativeFinite(info?.windowWidth ?? DEFAULT_WINDOW_WIDTH_PX, DEFAULT_WINDOW_WIDTH_PX) };
 }
 
 function pageSafeArea(page: PageContext): void {
-  page.__safeAreaBottomPx ??= safeAreaBottomPx();
+  const metrics = viewportMetrics();
+  page.__safeAreaBottomPx = metrics.safeAreaBottomPx;
+  page.__windowWidthPx = metrics.windowWidthPx;
 }
 
 function applyChatInsets(model: AiPageModel, page: PageContext, keyboardHeightPx = model.state.keyboardHeightPx): void {
-  const insets = calculateChatInsets(keyboardHeightPx, model.state.composerHeightPx, page.__safeAreaBottomPx ?? 0);
+  const insets = calculateChatInsets(keyboardHeightPx, model.state.composerHeightPx, page.__safeAreaBottomPx ?? 0, page.__windowWidthPx ?? DEFAULT_WINDOW_WIDTH_PX);
   model.state.keyboardHeightPx = nonNegativeFinite(keyboardHeightPx);
   model.state.composerBottomPx = insets.composerBottomPx;
   model.state.listBottomInsetPx = insets.listBottomInsetPx;
@@ -251,10 +260,31 @@ function updateComposerHeight(model: AiPageModel, page: PageContext, height: num
   scrollToChatEnd(model, page);
 }
 
-function scrollToChatEnd(model: AiPageModel, page: PageContext): void {
+function pageToken(page: PageContext): number {
+  return page.__lifecycleGeneration ?? 0;
+}
+
+function isPageActive(page: PageContext, token: number): boolean {
+  return page.__active !== false && pageToken(page) === token;
+}
+
+function beginPageLifecycle(page: PageContext): number {
+  page.__lifecycleGeneration = pageToken(page) + 1;
+  page.__active = true;
+  return page.__lifecycleGeneration;
+}
+
+function invalidatePageLifecycle(page: PageContext): void {
+  page.__lifecycleGeneration = pageToken(page) + 1;
+  page.__active = false;
+}
+
+function scrollToChatEnd(model: AiPageModel, page: PageContext, token = pageToken(page)): void {
+  if (!isPageActive(page, token)) return;
   model.state.scrollTarget = '';
   page.setData({ scrollTarget: '' });
   const commit = () => {
+    if (!isPageActive(page, token)) return;
     model.state.scrollTarget = CHAT_END_ID;
     page.setData({ scrollTarget: CHAT_END_ID });
   };
@@ -263,12 +293,13 @@ function scrollToChatEnd(model: AiPageModel, page: PageContext): void {
   else commit();
 }
 
-function measureComposer(model: AiPageModel, page: PageContext): void {
+function measureComposer(model: AiPageModel, page: PageContext, token = pageToken(page)): void {
   const query = page.createSelectorQuery?.();
   if (!query) return;
   const target = query.select('.composer');
   let measured = false;
   const applyMeasurement = (result: { height?: number } | Array<{ height?: number }> | null): void => {
+    if (!isPageActive(page, token)) return;
     const rect = Array.isArray(result) ? result[0] : result;
     if (!rect || typeof rect.height !== 'number' || !Number.isFinite(rect.height)) return;
     measured = true;
@@ -281,12 +312,13 @@ function measureComposer(model: AiPageModel, page: PageContext): void {
 function registerKeyboardListener(model: AiPageModel, page: PageContext): void {
   const runtime = wxRuntime();
   if (!runtime?.onKeyboardHeightChange || page.__keyboardListener) return;
-  page.__safeAreaBottomPx ??= safeAreaBottomPx();
   const listener = (result: { height?: number }) => {
+    const token = pageToken(page);
+    if (!isPageActive(page, token)) return;
     const keyboardHeightPx = typeof result?.height === 'number' && Number.isFinite(result.height) ? result.height : 0;
     applyChatInsets(model, page, keyboardHeightPx);
-    measureComposer(model, page);
-    scrollToChatEnd(model, page);
+    measureComposer(model, page, token);
+    scrollToChatEnd(model, page, token);
   };
   page.__keyboardListener = listener;
   runtime.onKeyboardHeightChange(listener);
@@ -301,42 +333,54 @@ function resetKeyboardListener(model: AiPageModel, page: PageContext): void {
 }
 
 async function refreshAfterOperation(model: AiPageModel, page: PageContext, operation: () => Promise<unknown>): Promise<void> {
+  const token = pageToken(page);
   const pending = operation();
+  if (!isPageActive(page, token)) { await pending; return; }
   page.setData(model.state);
-  scrollToChatEnd(model, page);
+  scrollToChatEnd(model, page, token);
   await pending;
+  if (!isPageActive(page, token)) return;
   page.setData(model.state);
-  measureComposer(model, page);
-  scrollToChatEnd(model, page);
+  measureComposer(model, page, token);
+  scrollToChatEnd(model, page, token);
 }
 
 export function createAiPage(model: AiPageModel) {
   return {
     data: model.state,
     async onShow(this: PageContext) {
+      const token = beginPageLifecycle(this);
       pageSafeArea(this);
+      applyChatInsets(model, this, 0);
+      this.setData(model.state);
+      scrollToChatEnd(model, this, token);
       registerKeyboardListener(model, this);
       this.getTabBar?.()?.setData({ selected: 3 });
       await model.hydrate();
+      if (!isPageActive(this, token)) return;
       this.setData(model.state);
-      measureComposer(model, this);
-      scrollToChatEnd(model, this);
+      measureComposer(model, this, token);
+      scrollToChatEnd(model, this, token);
     },
     async send(this: PageContext, event: { detail?: { value?: string } }) { await refreshAfterOperation(model, this, () => model.send(event.detail?.value ?? '')); },
-    onInput(this: PageContext, event: { detail?: { value?: string } }) { model.setDraft(event.detail?.value ?? ''); this.setData(model.state); measureComposer(model, this); scrollToChatEnd(model, this); },
+    onInput(this: PageContext, event: { detail?: { value?: string } }) { const token = pageToken(this); model.setDraft(event.detail?.value ?? ''); if (!isPageActive(this, token)) return; this.setData(model.state); measureComposer(model, this, token); scrollToChatEnd(model, this, token); },
     onComposerLineChange(this: PageContext, event?: { detail?: { height?: number } }) {
-      if (this.createSelectorQuery) measureComposer(model, this);
+      const token = pageToken(this);
+      if (!isPageActive(this, token)) return;
+      if (this.createSelectorQuery) measureComposer(model, this, token);
       else if (typeof event?.detail?.height === 'number') updateComposerHeight(model, this, event.detail.height);
     },
     onComposerResize(this: PageContext, event?: { detail?: { height?: number } }) {
-      if (this.createSelectorQuery) measureComposer(model, this);
+      const token = pageToken(this);
+      if (!isPageActive(this, token)) return;
+      if (this.createSelectorQuery) measureComposer(model, this, token);
       else if (typeof event?.detail?.height === 'number') updateComposerHeight(model, this, event.detail.height);
     },
     async sendCurrent(this: PageContext) { await refreshAfterOperation(model, this, () => model.sendCurrent()); },
     async quickQuestion(this: PageContext, event: { currentTarget?: { dataset?: { question?: string } } }) { await refreshAfterOperation(model, this, () => model.send(event.currentTarget?.dataset?.question ?? '')); },
-    async deleteHistory(this: PageContext) { await model.deleteHistory(); this.setData(model.state); scrollToChatEnd(model, this); },
-    onHide(this: PageContext) { resetKeyboardListener(model, this); },
-    onUnload(this: PageContext) { resetKeyboardListener(model, this); },
+    async deleteHistory(this: PageContext) { const token = pageToken(this); await model.deleteHistory(); if (!isPageActive(this, token)) return; this.setData(model.state); scrollToChatEnd(model, this, token); },
+    onHide(this: PageContext) { invalidatePageLifecycle(this); resetKeyboardListener(model, this); },
+    onUnload(this: PageContext) { invalidatePageLifecycle(this); resetKeyboardListener(model, this); },
   };
 }
 

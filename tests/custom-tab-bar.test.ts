@@ -110,9 +110,9 @@ test('reserves custom tab space and maps fixed icons for dark mode', () => {
     'pages/ai/index.wxss',
     'pages/more/index.wxss',
   ].map((file) => readFileSync(resolve(__dirname, `../${file}`), 'utf8'));
-  for (const stylesheet of styles) {
+  for (const [index, stylesheet] of styles.entries()) {
     const pageRules = [...stylesheet.matchAll(/\.(?:dashboard|ledger|ai|settings)-page\s*\{([^}]+)\}/g)].map((match) => match[1]);
-    expect(pageRules.some((rule) => /padding-bottom:\s*calc\(\s*(?:1[4-9]\d|[2-9]\d\d)rpx\s*\+\s*env\(safe-area-inset-bottom\)\s*\)/.test(rule))).toBe(true);
+    if (index !== 2) expect(pageRules.some((rule) => /padding-bottom:\s*calc\(\s*(?:1[4-9]\d|[2-9]\d\d)rpx\s*\+\s*env\(safe-area-inset-bottom\)\s*\)/.test(rule))).toBe(true);
   }
 
   const aiStyles = styles[2];

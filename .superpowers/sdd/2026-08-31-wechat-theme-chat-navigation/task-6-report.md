@@ -25,3 +25,12 @@ Status: complete
 
 - Task 6 changes are limited to `pages/ai/index.ts`, `pages/ai/index.js`, `pages/ai/index.wxml`, `pages/ai/index.wxss`, and the focused AI page tests.
 - WeChat DevTools/device keyboard behavior and live API/production acceptance remain external checks.
+
+## Review round 1 correction
+
+- Replaced the hardcoded 64px tab assumption with `112 * windowWidth / 750`; safe-area conversion uses `max(0, screenHeight - safeArea.bottom)` when `safeArea.bottom` is the platform coordinate.
+- Applied viewport metrics and cached-history scrolling synchronously on the first `onShow` before awaiting remote hydration; remote history is applied and scrolled again only when the lifecycle generation remains active.
+- Added lifecycle generation guards to keyboard events, selector measurements, and queued `nextTick` callbacks so hidden/unloaded pages receive no stale updates. Repeated `onShow` keeps one keyboard listener while the listener follows the current generation.
+- Bounded the AI root at `100vh` with `min-height: 0`/`overflow: hidden`, made the chat scroll view the sole flex-bounded viewport, and removed the AI root bottom reserve so calculated list inset is the single tab/safe-area clearance source.
+- Added regression coverage for queued callbacks, deferred hydration, accurate width fixtures, initial metrics, keyboard height zero, real page send transitions, WXML attributes, and CSS layout constraints.
+- Review-round verification: `npm test -- --runInBand` — PASS, 29 suites / 163 tests; `npm run typecheck` — PASS; `npm run build:wechat` — PASS; `git diff --check` — PASS.
