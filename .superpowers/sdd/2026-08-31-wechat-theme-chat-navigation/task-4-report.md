@@ -38,3 +38,33 @@ git diff --check
 
 - 微信开发者工具/真机仍需验收五槽布局、凸起中心按钮、安全区、主题切换和二级页面返回；本地 Jest、类型检查和构建不能替代设备验收。
 - 工作树在 Task 4 前已有大量用户批准的 Sunlit UI、主题、API 和测试改动；本任务未清理、还原、reset、rebase 或 amend 这些改动。
+
+## Sol review fix round 1
+
+### RED
+
+新增回归覆盖：
+
+- 从 `app.json` 收集 `themeLocation`、所有 `iconPath` 和 `selectedIconPath`，逐一断言文件存在且已由 `git ls-tree HEAD` 跟踪。
+- 断言四个主页面预留至少 `144rpx + env(safe-area-inset-bottom)` 底部空间；AI composer 位于 `112rpx` custom tab bar 及间距之上。
+- 断言 dark custom tab bar 为普通/选中 PNG 图标提供不同主题 filter；中心入口完成回调后可重试，同步抛错后也释放 guard。
+- 断言 `custom-tab-bar/index.js` 与 TypeScript 按 `tsconfig.miniprogram.json` 转译结果一致，以及 app/component 使用精确文案 `AI 聊天`。
+
+运行定向测试时，旧提交按预期失败：资源尚未在 HEAD，AI 文案仍无空格，底部安全区和 dark icon 断言不满足；修正测试解析规则后，失败收敛为 HEAD tracking 缺口。
+
+### GREEN
+
+- 提交 `d06c2f0`：将 `theme.json` 与 8 个 tabbar PNG 纳入 Git；`git ls-tree -r --name-only HEAD -- theme.json assets/tabbar` 已确认 9 个资源均存在。
+- 四个主页面补充统一底部留白；AI composer 的基础位置改为 `calc(112rpx + 20rpx + env(safe-area-inset-bottom))`，避免被 custom tab bar 覆盖。
+- dark tab bar 为普通和 selected 图标增加语义 filter 变量和选择器，WXML 对 selected 图标增加 class；更新 app/component 精确显示 `AI 聊天`。
+- 增加同步导航异常与完成后的 guard 重试测试；已有实现已通过，无需改变业务导航边界。
+- 增加 custom tabbar JS/TS artifact parity 测试。
+
+验证结果：
+
+```powershell
+npm test -- tests/custom-tab-bar.test.ts tests/app-config.test.ts tests/build-artifacts.test.ts
+npm run typecheck
+```
+
+定向 3 suites / 18 tests 通过，类型检查通过。完整回归、微信构建和 diff 检查在本轮末尾复跑。
