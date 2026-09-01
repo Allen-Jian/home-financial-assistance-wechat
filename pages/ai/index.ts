@@ -16,7 +16,7 @@ export interface AiMessage {
   role: 'user' | 'assistant';
   content: string;
   scope?: { from: string; to: string };
-  citations?: Array<AiCitation & { amountDisplay: string }>;
+  citations?: Array<AiCitation & { amountDisplay: string; occurredAtDisplay?: string }>;
   insights?: AiInsight[];
 }
 export interface AiPageState {
@@ -29,8 +29,17 @@ export interface AiPageState {
   draft: string;
 }
 
-function citationDisplay(citation: AiCitation): AiCitation & { amountDisplay: string } {
-  return { ...citation, amountDisplay: formatNzdMinor(citation.amountMinor) };
+function citationDisplay(citation: AiCitation): AiCitation & { amountDisplay: string; occurredAtDisplay?: string } {
+  const occurredAt = typeof citation.occurredAt === 'string' ? citation.occurredAt : '';
+  const date = occurredAt ? new Date(occurredAt) : null;
+  const occurredAtDisplay = date && !Number.isNaN(date.valueOf())
+    ? new Intl.DateTimeFormat('zh-CN', { timeZone: 'Pacific/Auckland', month: 'numeric', day: 'numeric' }).format(date)
+    : occurredAt || undefined;
+  return {
+    ...citation,
+    amountDisplay: formatNzdMinor(citation.amountMinor),
+    ...(occurredAtDisplay ? { occurredAtDisplay } : {}),
+  };
 }
 
 function isMessage(value: unknown): value is AiMessage {

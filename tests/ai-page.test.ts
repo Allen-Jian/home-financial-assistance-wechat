@@ -1,5 +1,5 @@
 import { ApiError } from '../src/api/client';
-import { AiPageModel, QUICK_QUESTIONS } from '../pages/ai/index';
+import { AiPageModel, createAiPage, QUICK_QUESTIONS } from '../pages/ai/index';
 import { SessionStore, type StorageLike } from '../src/auth/session-store';
 import { clearPrivateSession } from '../app';
 import { AI_CHAT_STORAGE_KEY } from '../src/shared/copy';
@@ -26,9 +26,38 @@ test('renders an answer with scope and transaction citations', async () => {
   const model = new AiPageModel(api, () => true, jest.fn(), new MemoryStorage());
   await expect(model.send('本月花最多的分类？')).resolves.toBe(true);
   expect(model.state.messages).toEqual(expect.arrayContaining([
-    expect.objectContaining({ role: 'assistant', content: answer.answer, scope: answer.scope, citations: answer.citations }),
+    expect.objectContaining({ role: 'assistant', content: answer.answer, scope: answer.scope, citations: [expect.objectContaining({ transactionId: 'tx-1', amountDisplay: 'NZ$12.50' })] }),
   ]));
   expect(model.state.notice).toContain('只能读取');
+});
+
+test('formats available citation dates without inventing missing dates', async () => {
+  const withoutDate = { transactionId: 'tx-2', amountMinor: 200 } as unknown as typeof answer.citations[number];
+  const api = { askAi: jest.fn().mockResolvedValue({
+    ...answer,
+    citations: [answer.citations[0], withoutDate],
+    insights: [],
+  }) };
+  const model = new AiPageModel(api, () => true, jest.fn(), new MemoryStorage());
+
+  await expect(model.send('找出异常支出')).resolves.toBe(true);
+
+  const citations = model.state.messages[1].citations ?? [];
+  expect(citations[0]).toMatchObject({ occurredAtDisplay: '8/15' });
+  expect(citations[1]).not.toHaveProperty('occurredAtDisplay');
+});
+
+test('composer sends the currently typed question and clears it after success', async () => {
+  const api = { askAi: jest.fn().mockResolvedValue({ ...answer, citations: [], conversationId: 'c-1', insights: [] }) };
+  const model = new AiPageModel(api, () => true, jest.fn(), new MemoryStorage());
+  const page = createAiPage(model);
+  const context = { setData: jest.fn() };
+  page.onInput.call(context, { detail: { value: '本月有什么异常？' } });
+
+  await page.sendCurrent.call(context);
+
+  expect(api.askAi).toHaveBeenCalledWith({ conversationId: undefined, message: '本月有什么异常？' });
+  expect(model.state.draft).toBe('');
 });
 
 test('refuses to submit while offline', async () => {
@@ -90,16 +119,32 @@ test('renders message bubbles with structured read-only assistant content', () =
   const wxml = readFileSync(join(repo, 'pages/ai/index.wxml'), 'utf8');
   const wxss = readFileSync(join(repo, 'pages/ai/index.wxss'), 'utf8');
 
-  expect(wxml).toMatch(/class="message-row \{\{item\.role\}\}"/);
-  expect(wxml).toMatch(/class="message-bubble"/);
-  expect(wxml).toMatch(/class="scope-row"/);
-  expect(wxml).toMatch(/class="insight-block"/);
-  expect(wxml).toMatch(/class="citation-row"/);
-  expect(wxml.indexOf('class="scope-row"')).toBeGreaterThan(wxml.indexOf('class="message-bubble"'));
-  expect(wxml.indexOf('class="insight-block"')).toBeGreaterThan(wxml.indexOf('class="message-bubble"'));
-  expect(wxml.indexOf('class="citation-row"')).toBeGreaterThan(wxml.indexOf('class="message-bubble"'));
+  const withoutComments = wxml.replace(/<!--[\s\S]*?-->/g, '');
+  const bubbleStart = withoutComments.indexOf('<view class="message-bubble">');
+  expect(bubbleStart).toBeGreaterThanOrEqual(0);
+  const viewTags = /<\/?view\b[^>]*>/g;
+  viewTags.lastIndex = bubbleStart;
+  let depth = 0;
+  let bubbleEnd = -1;
+  let match: RegExpExecArray | null;
+  while ((match = viewTags.exec(withoutComments))) {
+    if (match[0].startsWith('</')) depth -= 1;
+    else if (!match[0].endsWith('/>')) depth += 1;
+    if (depth === 0) { bubbleEnd = viewTags.lastIndex; break; }
+  }
+  expect(bubbleEnd).toBeGreaterThan(bubbleStart);
+  const bubble = withoutComments.slice(bubbleStart, bubbleEnd);
+
+  expect(withoutComments).toMatch(/class="message-row \{\{item\.role\}\}"/);
+  expect(bubble).toMatch(/class="scope-row"/);
+  expect(bubble).toMatch(/class="insight-block"/);
+  expect(bubble).toMatch(/class="citation-row"[\s\S]*?class="citation-date"[\s\S]*?citation\.occurredAtDisplay/);
+  expect(withoutComments).not.toMatch(/class="message \{\{item\.role\}\}"/);
+  expect(withoutComments).not.toMatch(/class="scope-line"|class="insight-line"/);
   expect(wxss).toMatch(/\.message-row\.user\s*\{[^}]*justify-content:\s*flex-end/);
   expect(wxss).toMatch(/\.message-row\.assistant\s*\{[^}]*justify-content:\s*flex-start/);
   expect(wxss).toMatch(/\.message-bubble\s*\{[^}]*max-width:\s*78%/);
+  expect(wxss).toMatch(/\.message-bubble\s*\{[^}]*width:\s*(?:fit-content|max-content|auto)/);
+  expect(wxss).not.toMatch(/\.message-bubble\s*\{[^}]*;\s*width:\s*(?:78%|100%)/);
   expect(wxss).toMatch(/overflow-wrap:\s*anywhere/);
 });

@@ -9,7 +9,16 @@ const money_1 = require("../../src/domain/money");
 const themed_page_1 = require("../../src/shared/themed-page");
 exports.QUICK_QUESTIONS = ['本月花最多的分类？', '找出异常支出', '比较本季与上季'];
 function citationDisplay(citation) {
-    return { ...citation, amountDisplay: (0, money_1.formatNzdMinor)(citation.amountMinor) };
+    const occurredAt = typeof citation.occurredAt === 'string' ? citation.occurredAt : '';
+    const date = occurredAt ? new Date(occurredAt) : null;
+    const occurredAtDisplay = date && !Number.isNaN(date.valueOf())
+        ? new Intl.DateTimeFormat('zh-CN', { timeZone: 'Pacific/Auckland', month: 'numeric', day: 'numeric' }).format(date)
+        : occurredAt || undefined;
+    return {
+        ...citation,
+        amountDisplay: (0, money_1.formatNzdMinor)(citation.amountMinor),
+        ...(occurredAtDisplay ? { occurredAtDisplay } : {}),
+    };
 }
 function isMessage(value) {
     if (!value || typeof value !== 'object')
