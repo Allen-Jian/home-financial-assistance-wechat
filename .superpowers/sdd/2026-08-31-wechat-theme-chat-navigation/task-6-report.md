@@ -34,3 +34,11 @@ Status: complete
 - Bounded the AI root at `100vh` with `min-height: 0`/`overflow: hidden`, made the chat scroll view the sole flex-bounded viewport, and removed the AI root bottom reserve so calculated list inset is the single tab/safe-area clearance source.
 - Added regression coverage for queued callbacks, deferred hydration, accurate width fixtures, initial metrics, keyboard height zero, real page send transitions, WXML attributes, and CSS layout constraints.
 - Review-round verification: `npm test -- --runInBand` — PASS, 29 suites / 163 tests; `npm run typecheck` — PASS; `npm run build:wechat` — PASS; `git diff --check` — PASS.
+
+## Review round 2 correction
+
+- Hydration now accepts a lifecycle predicate and owns a request generation. Overlapping remote responses apply only while both the request and page generation are current; stale responses and errors cannot mutate state or persistence. Clear-history invalidates pending hydration before removing the private cache.
+- Hydration parses remote data before the final validity check, then checks again immediately before state assignment and persistence. Cached history remains visible while the remote request is pending.
+- Hide/unload invalidation and keyboard unbinding reset internal layout state without `setData`; repeated teardown removes the listener only once, and a later `onShow` reapplies the current metrics.
+- Added deferred overlap, clear-history cancellation, stale callback, and render-free teardown regressions. Hydration has no error-state mutation; stale hydration errors are therefore ignored without changing model state.
+- Review-round verification: `npm test -- --runInBand` — PASS, 29 suites / 166 tests; `npm run typecheck` — PASS; `npm run build:wechat` — PASS; `git diff --check` — PASS.

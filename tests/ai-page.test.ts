@@ -203,6 +203,97 @@ test('renders the submitted user message, assistant response, and error transiti
   expect(model.state.error).toContain('超时');
 });
 
+test('keeps the newest hydration response and persistence when onShow requests overlap', async () => {
+  const storage = new MemoryStorage();
+  const pending: Array<{ resolve: (value: AiConversationSummary[]) => void; reject: (error: Error) => void }> = [];
+  const api = {
+    askAi: jest.fn(),
+    listAiConversations: jest.fn(() => new Promise<AiConversationSummary[]>((resolve, reject) => pending.push({ resolve, reject }))),
+  };
+  const previousWx = (globalThis as { wx?: unknown }).wx;
+  (globalThis as { wx?: unknown }).wx = { nextTick: (callback: () => void) => callback(), getSystemInfoSync: () => ({ windowWidth: 375 }) };
+  try {
+    const model = new AiPageModel(api, () => true, jest.fn(), storage);
+    const page = createAiPage(model);
+    const context = { setData: jest.fn(), getTabBar: jest.fn() };
+    const first = page.onShow.call(context);
+    await Promise.resolve();
+    const second = page.onShow.call(context);
+    await Promise.resolve();
+    const remote = (id: string, content: string) => ({ id, updatedAt: id, expiresAt: id, messages: [{ role: 'assistant' as const, contentJson: { answer: content } }] }) as AiConversationSummary;
+
+    pending[1].resolve([remote('new', '最新回答')]);
+    await second;
+    pending[0].resolve([remote('old', '过期回答')]);
+    await first;
+
+    expect(model.state.messages).toEqual([expect.objectContaining({ content: '最新回答' })]);
+    expect(storage.getStorageSync(AI_CHAT_STORAGE_KEY)).toContain('最新回答');
+    expect(storage.getStorageSync(AI_CHAT_STORAGE_KEY)).not.toContain('过期回答');
+  } finally {
+    (globalThis as { wx?: unknown }).wx = previousWx;
+  }
+});
+
+test('keeps clear-history state when a pending hydration resolves afterward', async () => {
+  const storage = new MemoryStorage();
+  let resolveHistory!: (value: AiConversationSummary[]) => void;
+  const api = {
+    askAi: jest.fn(),
+    listAiConversations: jest.fn(() => new Promise<AiConversationSummary[]>((resolve) => { resolveHistory = resolve; })),
+  };
+  const previousWx = (globalThis as { wx?: unknown }).wx;
+  (globalThis as { wx?: unknown }).wx = { nextTick: (callback: () => void) => callback(), getSystemInfoSync: () => ({ windowWidth: 375 }) };
+  try {
+    const model = new AiPageModel(api, () => true, jest.fn(), storage);
+    const page = createAiPage(model);
+    const context = { setData: jest.fn(), getTabBar: jest.fn() };
+    const pending = page.onShow.call(context);
+    await Promise.resolve();
+    await page.deleteHistory.call(context);
+    resolveHistory([{ id: 'stale', updatedAt: 'stale', expiresAt: 'stale', messages: [{ role: 'assistant', contentJson: { answer: '不应恢复' } }] }]);
+    await pending;
+
+    expect(model.state.messages).toEqual([]);
+    expect(storage.getStorageSync(AI_CHAT_STORAGE_KEY)).toBeUndefined();
+  } finally {
+    (globalThis as { wx?: unknown }).wx = previousWx;
+  }
+});
+
+test('teardown resets keyboard state without rendering and reactivates on the next show', async () => {
+  const listeners: Array<(result: { height?: number }) => void> = [];
+  const offKeyboardHeightChange = jest.fn();
+  const previousWx = (globalThis as { wx?: unknown }).wx;
+  (globalThis as { wx?: unknown }).wx = {
+    onKeyboardHeightChange: jest.fn((listener: (result: { height?: number }) => void) => listeners.push(listener)),
+    offKeyboardHeightChange,
+    nextTick: (callback: () => void) => callback(),
+    getSystemInfoSync: () => ({ windowWidth: 375, screenHeight: 800, safeArea: { bottom: 760 } }),
+  };
+  try {
+    const model = new AiPageModel({ askAi: jest.fn() }, () => true, jest.fn(), new MemoryStorage());
+    const page = createAiPage(model);
+    const setData = jest.fn();
+    const context = { setData, getTabBar: jest.fn() };
+    await page.onShow.call(context);
+    listeners[0]({ height: 280 });
+    setData.mockClear();
+
+    page.onHide.call(context);
+    page.onUnload.call(context);
+    expect(setData).not.toHaveBeenCalled();
+    expect(offKeyboardHeightChange).toHaveBeenCalledTimes(1);
+    expect(model.state.keyboardHeightPx).toBe(0);
+
+    await page.onShow.call(context);
+    expect(setData).toHaveBeenCalledWith(expect.objectContaining({ keyboardHeightPx: 0, composerBottomPx: expect.closeTo(104, 8) }));
+    expect(listeners).toHaveLength(2);
+  } finally {
+    (globalThis as { wx?: unknown }).wx = previousWx;
+  }
+});
+
 test('renders an answer with scope and transaction citations', async () => {
   const api = { askAi: jest.fn().mockResolvedValue(answer) };
   const model = new AiPageModel(api, () => true, jest.fn(), new MemoryStorage());

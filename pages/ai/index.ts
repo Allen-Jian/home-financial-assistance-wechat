@@ -77,6 +77,7 @@ function isMessage(value: unknown): value is AiMessage {
 
 export class AiPageModel {
   readonly state: AiPageState;
+  private hydrationRequest = 0;
 
   constructor(
     private readonly api: AiApiPort,
@@ -101,25 +102,34 @@ export class AiPageModel {
     };
   }
 
-  async hydrate(): Promise<void> {
+  async hydrate(isCurrent: () => boolean = () => true): Promise<void> {
     if (!this.isOnline() || !this.api.listAiConversations) return;
+    const request = ++this.hydrationRequest;
+    const shouldApply = () => request === this.hydrationRequest && isCurrent();
     try {
       const conversations = await this.api.listAiConversations();
+      if (!shouldApply()) return;
       const latest = conversations[0] as (AiConversationSummary & { messages?: Array<{ role: 'user' | 'assistant'; contentJson?: unknown }> }) | undefined;
       if (!latest) return;
+      const messages = Array.isArray(latest.messages) ? latest.messages.map((message) => {
+          const content = typeof message.contentJson === 'object' && message.contentJson !== null ? message.contentJson as Record<string, unknown> : {};
+          return {
+            role: message.role,
+            content: typeof content.answer === 'string' ? content.answer : typeof content.text === 'string' ? content.text : '',
+            scope: content.scope as { from: string; to: string } | undefined,
+            citations: Array.isArray(content.citations) ? (content.citations as AiCitation[]).map(citationDisplay) : undefined,
+            insights: Array.isArray(content.insights) ? content.insights as AiInsight[] : undefined,
+          };
+        }).filter((message) => message.content) : undefined;
+      if (!shouldApply()) return;
       this.state.conversationId = latest.id;
-      if (Array.isArray(latest.messages)) this.state.messages = latest.messages.map((message) => {
-        const content = typeof message.contentJson === 'object' && message.contentJson !== null ? message.contentJson as Record<string, unknown> : {};
-        return {
-          role: message.role,
-          content: typeof content.answer === 'string' ? content.answer : typeof content.text === 'string' ? content.text : '',
-          scope: content.scope as { from: string; to: string } | undefined,
-          citations: Array.isArray(content.citations) ? (content.citations as AiCitation[]).map(citationDisplay) : undefined,
-          insights: Array.isArray(content.insights) ? content.insights as AiInsight[] : undefined,
-        };
-      }).filter((message) => message.content);
+      if (messages) this.state.messages = messages;
+      if (!shouldApply()) return;
       this.persist();
-    } catch { /* cached chat remains visible */ }
+    } catch {
+      if (!shouldApply()) return;
+      /* cached chat remains visible */
+    }
   }
 
   async send(message: string): Promise<boolean> {
@@ -160,6 +170,7 @@ export class AiPageModel {
   }
 
   deleteHistory(): Promise<boolean> {
+    this.hydrationRequest += 1;
     const conversationId = this.state.conversationId;
     this.state.messages = [];
     this.state.conversationId = '';
@@ -329,7 +340,10 @@ function resetKeyboardListener(model: AiPageModel, page: PageContext): void {
   const listener = page.__keyboardListener;
   if (listener) runtime?.offKeyboardHeightChange?.(listener);
   page.__keyboardListener = undefined;
-  applyChatInsets(model, page, 0);
+  const insets = calculateChatInsets(0, model.state.composerHeightPx, page.__safeAreaBottomPx ?? 0, page.__windowWidthPx ?? DEFAULT_WINDOW_WIDTH_PX);
+  model.state.keyboardHeightPx = 0;
+  model.state.composerBottomPx = insets.composerBottomPx;
+  model.state.listBottomInsetPx = insets.listBottomInsetPx;
 }
 
 async function refreshAfterOperation(model: AiPageModel, page: PageContext, operation: () => Promise<unknown>): Promise<void> {
@@ -356,7 +370,7 @@ export function createAiPage(model: AiPageModel) {
       scrollToChatEnd(model, this, token);
       registerKeyboardListener(model, this);
       this.getTabBar?.()?.setData({ selected: 3 });
-      await model.hydrate();
+      await model.hydrate(() => isPageActive(this, token));
       if (!isPageActive(this, token)) return;
       this.setData(model.state);
       measureComposer(model, this, token);

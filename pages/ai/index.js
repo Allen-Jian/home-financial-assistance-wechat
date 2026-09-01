@@ -52,6 +52,7 @@ class AiPageModel {
         this.isOnline = isOnline;
         this.navigate = navigate;
         this.storage = storage;
+        this.hydrationRequest = 0;
         const composerHeightPx = 60;
         const insets = calculateChatInsets(0, composerHeightPx, 0, DEFAULT_WINDOW_WIDTH_PX);
         this.state = {
@@ -68,29 +69,42 @@ class AiPageModel {
             scrollTarget: '',
         };
     }
-    async hydrate() {
+    async hydrate(isCurrent = () => true) {
         if (!this.isOnline() || !this.api.listAiConversations)
             return;
+        const request = ++this.hydrationRequest;
+        const shouldApply = () => request === this.hydrationRequest && isCurrent();
         try {
             const conversations = await this.api.listAiConversations();
+            if (!shouldApply())
+                return;
             const latest = conversations[0];
             if (!latest)
                 return;
+            const messages = Array.isArray(latest.messages) ? latest.messages.map((message) => {
+                const content = typeof message.contentJson === 'object' && message.contentJson !== null ? message.contentJson : {};
+                return {
+                    role: message.role,
+                    content: typeof content.answer === 'string' ? content.answer : typeof content.text === 'string' ? content.text : '',
+                    scope: content.scope,
+                    citations: Array.isArray(content.citations) ? content.citations.map(citationDisplay) : undefined,
+                    insights: Array.isArray(content.insights) ? content.insights : undefined,
+                };
+            }).filter((message) => message.content) : undefined;
+            if (!shouldApply())
+                return;
             this.state.conversationId = latest.id;
-            if (Array.isArray(latest.messages))
-                this.state.messages = latest.messages.map((message) => {
-                    const content = typeof message.contentJson === 'object' && message.contentJson !== null ? message.contentJson : {};
-                    return {
-                        role: message.role,
-                        content: typeof content.answer === 'string' ? content.answer : typeof content.text === 'string' ? content.text : '',
-                        scope: content.scope,
-                        citations: Array.isArray(content.citations) ? content.citations.map(citationDisplay) : undefined,
-                        insights: Array.isArray(content.insights) ? content.insights : undefined,
-                    };
-                }).filter((message) => message.content);
+            if (messages)
+                this.state.messages = messages;
+            if (!shouldApply())
+                return;
             this.persist();
         }
-        catch { /* cached chat remains visible */ }
+        catch {
+            if (!shouldApply())
+                return;
+            /* cached chat remains visible */
+        }
     }
     async send(message) {
         var _a, _b;
@@ -140,6 +154,7 @@ class AiPageModel {
         return sent;
     }
     deleteHistory() {
+        this.hydrationRequest += 1;
         const conversationId = this.state.conversationId;
         this.state.messages = [];
         this.state.conversationId = '';
@@ -283,13 +298,16 @@ function registerKeyboardListener(model, page) {
     runtime.onKeyboardHeightChange(listener);
 }
 function resetKeyboardListener(model, page) {
-    var _a;
+    var _a, _b, _c;
     const runtime = wxRuntime();
     const listener = page.__keyboardListener;
     if (listener)
         (_a = runtime === null || runtime === void 0 ? void 0 : runtime.offKeyboardHeightChange) === null || _a === void 0 ? void 0 : _a.call(runtime, listener);
     page.__keyboardListener = undefined;
-    applyChatInsets(model, page, 0);
+    const insets = calculateChatInsets(0, model.state.composerHeightPx, (_b = page.__safeAreaBottomPx) !== null && _b !== void 0 ? _b : 0, (_c = page.__windowWidthPx) !== null && _c !== void 0 ? _c : DEFAULT_WINDOW_WIDTH_PX);
+    model.state.keyboardHeightPx = 0;
+    model.state.composerBottomPx = insets.composerBottomPx;
+    model.state.listBottomInsetPx = insets.listBottomInsetPx;
 }
 async function refreshAfterOperation(model, page, operation) {
     const token = pageToken(page);
@@ -319,7 +337,7 @@ function createAiPage(model) {
             scrollToChatEnd(model, this, token);
             registerKeyboardListener(model, this);
             (_b = (_a = this.getTabBar) === null || _a === void 0 ? void 0 : _a.call(this)) === null || _b === void 0 ? void 0 : _b.setData({ selected: 3 });
-            await model.hydrate();
+            await model.hydrate(() => isPageActive(this, token));
             if (!isPageActive(this, token))
                 return;
             this.setData(model.state);
