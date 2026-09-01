@@ -10,7 +10,7 @@
         <text class="message-content">{{item.content}}</text>
         <view wx:if="{{item.scope}}" class="scope-row"><text>分析范围：</text><text>{{item.scope.from}} — {{item.scope.to}}</text></view>
         <view wx:for="{{item.insights}}" wx:for-item="insight" wx:key="title" class="insight-block"><text>{{insight.title}}</text><text wx:if="{{insight.value || insight.value === 0}}">{{insight.value}} {{insight.unit}}</text><text wx:if="{{insight.detail}}">{{insight.detail}}</text></view>
-        <view wx:if="{{item.citations && item.citations.length}}" class="citation-list"><view wx:for="{{item.citations}}" wx:for-item="citation" wx:key="transactionId" class="citation-row"><view class="receipt-icon"></view><view class="citation-copy"><text>{{citation.merchant || '未命名账目'}} · {{citation.amountDisplay}}</text><text wx:if="{{citation.occurredAt}}" class="citation-date">{{citation.occurredAtDisplay || citation.occurredAt}}</text></view></view></view>
+        <view wx:if="{{item.citations && item.citations.length}}" class="citation-list"><view wx:for="{{item.citations}}" wx:for-item="citation" wx:key="transactionId" class="citation-row"><view class="receipt-icon"></view><view class="citation-copy"><text class="citation-merchant">{{citation.merchant || '未命名账目'}}</text><view class="citation-meta"><text class="citation-amount">{{citation.amountDisplay}}</text><text class="citation-date-separator" wx:if="{{citation.occurredAt}}">·</text><text class="citation-date" wx:if="{{citation.occurredAt}}">{{citation.occurredAtDisplay || citation.occurredAt}}</text></view></view></view></view>
       </view>
     </view>
     <view wx:if="{{loading}}" class="typing"><view></view><view></view><view></view></view>

@@ -47,6 +47,72 @@ test('formats available citation dates without inventing missing dates', async (
   expect(citations[1]).not.toHaveProperty('occurredAtDisplay');
 });
 
+test('separates citation merchant, amount, and date into readable metadata', () => {
+  const { readFileSync } = require('node:fs') as typeof import('node:fs');
+  const { join } = require('node:path') as typeof import('node:path');
+  const repo = join(__dirname, '..');
+  const wxml = readFileSync(join(repo, 'pages/ai/index.wxml'), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+  const wxss = readFileSync(join(repo, 'pages/ai/index.wxss'), 'utf8');
+  const textElements = [...wxml.matchAll(/<text\b[^>]*>[\s\S]*?<\/text>/g)].map((match) => match[0]);
+  const amountElement = textElements.find((element) => element.includes('citation.amountDisplay')) ?? '';
+  const dateElement = textElements.find((element) => element.includes('citation.occurredAtDisplay')) ?? '';
+
+  expect(wxml).toMatch(/class="citation-meta"/);
+  expect(wxml).toMatch(/class="citation-amount"[^>]*>\{\{citation\.amountDisplay\}\}/);
+  expect(wxml).toMatch(/class="citation-date-separator"[^>]*wx:if="\{\{citation\.occurredAt\}\}"/);
+  expect(wxml).toMatch(/class="citation-date"[^>]*>\{\{citation\.occurredAtDisplay \|\| citation\.occurredAt\}\}/);
+  expect(amountElement).not.toContain('citation.occurredAt');
+  expect(dateElement).not.toContain('citation.amountDisplay');
+  expect(wxss).toMatch(/\.citation-copy\s*\{/);
+  expect(wxss).toMatch(/\.citation-meta\s*\{[^}]*display:\s*flex[^}]*gap:\s*\d+rpx/);
+  expect(wxss).toMatch(/\.citation-date-separator\s*\{/);
+  expect(wxss).toMatch(/\.citation-date\s*\{/);
+});
+
+interface CssRule {
+  selectors: string[];
+  declarations: Record<string, string>;
+}
+
+function parseCssRules(styles: string): CssRule[] {
+  const rules: CssRule[] = [];
+  const source = styles.replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const match of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const declarations: Record<string, string> = {};
+    for (const declaration of match[2].split(';')) {
+      const separator = declaration.indexOf(':');
+      if (separator < 0) continue;
+      const property = declaration.slice(0, separator).trim();
+      const value = declaration.slice(separator + 1).trim();
+      if (property && value) declarations[property] = value;
+    }
+    rules.push({ selectors: match[1].split(',').map((selector) => selector.trim()), declarations });
+  }
+  return rules;
+}
+
+function assertMessageBubbleCascade(styles: string): void {
+  const rules = parseCssRules(styles);
+  const exactRules = rules.filter((rule) => rule.selectors.includes('.message-bubble'));
+  const finalDeclarations = exactRules.reduce<Record<string, string>>((result, rule) => ({ ...result, ...rule.declarations }), {});
+  const equivalentOverrides = rules
+    .filter((rule) => rule.selectors.some((selector) => selector.includes('.message-bubble') && selector !== '.message-bubble'))
+    .flatMap((rule) => Object.keys(rule.declarations).filter((property) => property === 'width' || property === 'max-width'));
+  if (equivalentOverrides.length || finalDeclarations.width !== 'fit-content' || finalDeclarations['max-width'] !== '78%') {
+    throw new Error(`unexpected message bubble cascade: ${JSON.stringify({ finalDeclarations, equivalentOverrides })}`);
+  }
+}
+
+test('asserts final message-bubble width cascade and rejects later overrides', () => {
+  const { readFileSync } = require('node:fs') as typeof import('node:fs');
+  const { join } = require('node:path') as typeof import('node:path');
+  const wxss = readFileSync(join(__dirname, '..', 'pages/ai/index.wxss'), 'utf8');
+
+  expect(() => assertMessageBubbleCascade(wxss)).not.toThrow();
+  expect(() => assertMessageBubbleCascade(`${wxss}\n.message-bubble { width: 100%; max-width: 100%; }`)).toThrow();
+  expect(() => assertMessageBubbleCascade(`${wxss}\n.message-row.user .message-bubble { width: 100%; }`)).toThrow();
+});
+
 test('composer sends the currently typed question and clears it after success', async () => {
   const api = { askAi: jest.fn().mockResolvedValue({ ...answer, citations: [], conversationId: 'c-1', insights: [] }) };
   const model = new AiPageModel(api, () => true, jest.fn(), new MemoryStorage());
