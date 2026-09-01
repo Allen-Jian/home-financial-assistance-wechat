@@ -6,7 +6,7 @@
         <text>{{item.label}}</text>
       </button>
       <button wx:else class="tab-slot {{selected === index ? 'selected' : ''}}" bindtap="selectTab" data-index="{{index}}" aria-label="{{item.label}}">
-        <image class="tab-icon" src="{{selected === index ? item.selectedIcon : item.icon}}" mode="aspectFit" />
+        <image class="tab-icon {{selected === index ? 'selected' : ''}}" src="{{selected === index ? item.selectedIcon : item.icon}}" mode="aspectFit" />
         <text>{{item.label}}</text>
       </button>
     </block>

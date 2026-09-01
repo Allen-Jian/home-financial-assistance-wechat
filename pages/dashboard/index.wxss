@@ -1,4 +1,4 @@
-.dashboard-page { min-height: 100vh; padding: 30rpx 32rpx 150rpx; background: var(--color-background); }
+.dashboard-page { min-height: 100vh; padding: 30rpx 32rpx 0; padding-bottom: calc(144rpx + env(safe-area-inset-bottom)); background: var(--color-background); }
 .home-header, .balance-head, .balance-foot, .section-head { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
 .home-kicker, .home-title { display: block; }.home-kicker { color: var(--color-muted); font-size: 24rpx; }.home-title { margin-top: 6rpx; color: var(--color-text); font-size: 38rpx; font-weight: 600; }
 .cache-label { flex: none; padding: 8rpx 14rpx; border-radius: 999rpx; color: var(--color-warning); background: var(--color-warning-surface); font-size: 22rpx; }

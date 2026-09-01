@@ -47,7 +47,7 @@
       },
       {
         "pagePath": "pages/ai/index",
-        "text": "AI聊天",
+        "text": "AI 聊天",
         "iconPath": "assets/tabbar/ai.png",
         "selectedIconPath": "assets/tabbar/ai-selected.png"
       },

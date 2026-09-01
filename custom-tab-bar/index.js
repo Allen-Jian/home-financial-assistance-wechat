@@ -7,7 +7,7 @@ exports.TAB_SLOTS = [
     { label: '首页', pagePath: 'pages/dashboard/index', icon: '/assets/tabbar/home.png', selectedIcon: '/assets/tabbar/home-selected.png' },
     { label: '账目', pagePath: 'pages/ledger/index', icon: '/assets/tabbar/ledger.png', selectedIcon: '/assets/tabbar/ledger-selected.png' },
     { label: '记账', action: 'entry' },
-    { label: 'AI聊天', pagePath: 'pages/ai/index', icon: '/assets/tabbar/ai.png', selectedIcon: '/assets/tabbar/ai-selected.png' },
+    { label: 'AI 聊天', pagePath: 'pages/ai/index', icon: '/assets/tabbar/ai.png', selectedIcon: '/assets/tabbar/ai-selected.png' },
     { label: '设置', pagePath: 'pages/more/index', icon: '/assets/tabbar/settings.png', selectedIcon: '/assets/tabbar/settings-selected.png' },
 ];
 function readIndex(input) {

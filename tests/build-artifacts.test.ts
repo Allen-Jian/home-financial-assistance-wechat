@@ -42,6 +42,15 @@ test('wechat build keeps every themed page and wrapper JS artifact in sync with 
   }
 });
 
+test('wechat build keeps the custom tab bar JS artifact in sync with TypeScript', () => {
+  const compilerOptions = projectCompilerOptions();
+  const tsPath = resolve(__dirname, '../custom-tab-bar/index.ts');
+  const jsPath = resolve(__dirname, '../custom-tab-bar/index.js');
+  expect(existsSync(tsPath)).toBe(true);
+  expect(existsSync(jsPath)).toBe(true);
+  expect(normalize(readFileSync(jsPath, 'utf8'))).toBe(normalize(transpile(readFileSync(tsPath, 'utf8'), compilerOptions)));
+});
+
 test('artifact transpilation honors the project default-import interop option', () => {
   const compilerOptions = projectCompilerOptions();
   const fixture = "import value from 'fixture'; export const result = value;";

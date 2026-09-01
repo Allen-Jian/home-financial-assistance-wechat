@@ -5,6 +5,8 @@
   --tab-selected: #2F6F64;
   --tab-action: #FF9671;
   --tab-action-text: #24312D;
+  --tab-icon-filter: none;
+  --tab-icon-selected-filter: none;
   position: relative;
   color: var(--tab-text);
   background: var(--tab-background);
@@ -17,6 +19,8 @@
   --tab-selected: #74C6B2;
   --tab-action: #FF9F7D;
   --tab-action-text: #10231E;
+  --tab-icon-filter: brightness(0) saturate(100%) invert(70%) sepia(8%) saturate(330%) hue-rotate(115deg) brightness(91%) contrast(87%);
+  --tab-icon-selected-filter: brightness(0) saturate(100%) invert(76%) sepia(20%) saturate(671%) hue-rotate(115deg) brightness(91%) contrast(88%);
 }
 
 .tab-bar-inner {
@@ -47,6 +51,8 @@
 
 .tab-slot.selected { color: var(--tab-selected); font-weight: 600; }
 .tab-icon { width: 42rpx; height: 42rpx; }
+.custom-tab-bar.theme-dark .tab-icon { filter: var(--tab-icon-filter); }
+.custom-tab-bar.theme-dark .tab-icon.selected { filter: var(--tab-icon-selected-filter); }
 .action-slot { z-index: 1; color: var(--tab-action-text); }
 .action-icon {
   display: flex;
