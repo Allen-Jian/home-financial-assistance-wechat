@@ -6,7 +6,7 @@ Status: complete
 
 - `cc22b48 feat: finalize sunlit ledger UI contracts` — captured the exact pre-existing Sunlit UI/API-contract dirty and untracked files in an explicit baseline commit; no `.superpowers/sdd` scratch files were included.
 - `7283fa4 feat: add receipt image sources` — added the initial camera/album/chat-image sources and cancellation semantics.
-- The Task 7 fix round is committed separately after the baseline below.
+- `b4a4189 fix: harden receipt image retries` — added the Task 7 fix round for offline gating, attachment retention, retries, and byte-signature MIME normalization.
 
 ## Implementation
 
