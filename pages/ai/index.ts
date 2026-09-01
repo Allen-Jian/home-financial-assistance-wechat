@@ -133,7 +133,10 @@ export class AiPageModel {
   private persist(): void { this.storage.setStorageSync(AI_CHAT_STORAGE_KEY, JSON.stringify(this.state.messages)); }
 }
 
-interface PageContext { setData(data: unknown): void }
+interface PageContext {
+  setData(data: unknown): void;
+  getTabBar?(): { setData(data: { selected: number }): void } | undefined;
+}
 
 interface WxNetworkRuntime {
   getNetworkType(options: { success: (result: { networkType?: string }) => void; fail?: () => void }): void;
@@ -153,7 +156,11 @@ function createOnlineStatus(): () => boolean {
 export function createAiPage(model: AiPageModel) {
   return {
     data: model.state,
-    async onShow(this: PageContext) { await model.hydrate(); this.setData(model.state); },
+    async onShow(this: PageContext) {
+      this.getTabBar?.()?.setData({ selected: 3 });
+      await model.hydrate();
+      this.setData(model.state);
+    },
     async send(this: PageContext, event: { detail?: { value?: string } }) { await model.send(event.detail?.value ?? ''); this.setData(model.state); },
     onInput(this: PageContext, event: { detail?: { value?: string } }) { model.setDraft(event.detail?.value ?? ''); this.setData(model.state); },
     async sendCurrent(this: PageContext) { await model.sendCurrent(); this.setData(model.state); },

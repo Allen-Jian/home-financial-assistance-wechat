@@ -46,7 +46,10 @@ export interface DashboardState {
   insightsFromCache: boolean;
 }
 
-interface PageContext { setData(data: unknown): void }
+interface PageContext {
+  setData(data: unknown): void;
+  getTabBar?(): { setData(data: { selected: number }): void } | undefined;
+}
 
 const CACHE_TTL = 5 * 60_000;
 
@@ -175,10 +178,10 @@ export function createDashboardPage(
   return {
     data: model.state,
     async onShow(this: PageContext) {
+      this.getTabBar?.()?.setData({ selected: 0 });
       await model.load(period());
       this.setData(model.state);
     },
-    onQuickEntry() { wx.navigateTo({ url: '/pages/entry/index' }); },
     onPhotoEntry() { wx.navigateTo({ url: '/pages/entry/photo/index' }); },
     onManualEntry() { wx.navigateTo({ url: '/pages/ledger/edit/index' }); },
     onOpenLedger() { wx.switchTab({ url: '/pages/ledger/index' }); },

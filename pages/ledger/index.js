@@ -327,6 +327,8 @@ function createLedgerListPage(model) {
     return {
         data: model.state,
         async onShow() {
+            var _a, _b;
+            (_b = (_a = this.getTabBar) === null || _a === void 0 ? void 0 : _a.call(this)) === null || _b === void 0 ? void 0 : _b.setData({ selected: 1 });
             await model.load(model.currentPeriod());
             this.setData(model.state);
         },

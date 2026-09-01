@@ -318,7 +318,10 @@ export class LedgerPageModel {
   }
 }
 
-interface PageContext { setData(data: unknown): void }
+interface PageContext {
+  setData(data: unknown): void;
+  getTabBar?(): { setData(data: { selected: number }): void } | undefined;
+}
 
 export function createLedgerPage(model: LedgerPageModel) {
   return {
@@ -346,6 +349,7 @@ export function createLedgerListPage(model: LedgerListPageModel) {
   return {
     data: model.state,
     async onShow(this: PageContext) {
+      this.getTabBar?.()?.setData({ selected: 1 });
       await model.load(model.currentPeriod());
       this.setData(model.state);
     },

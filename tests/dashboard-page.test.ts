@@ -1,4 +1,6 @@
-import { DashboardPageModel } from '../pages/dashboard/index';
+import { createDashboardPage, DashboardPageModel } from '../pages/dashboard/index';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { ApiError } from '../src/api/client';
 import type { AccountSummary, AiInsight, CategorySummary, DashboardSummary } from '../src/api/contracts';
 import { ReadCache } from '../src/cache/read-cache';
@@ -31,6 +33,36 @@ const summary: DashboardSummary = {
 const accounts: AccountSummary[] = [{ id: 'account-1', name: '日常账户', kind: 'asset', openingBalanceMinor: 0 }];
 const categories: CategorySummary[] = [{ id: 'category-1', name: '餐饮', direction: 'expense' }];
 
+test('dashboard no longer renders the duplicate floating add action', () => {
+  const wxml = readFileSync(resolve(__dirname, '../pages/dashboard/index.wxml'), 'utf8');
+  const wxss = readFileSync(resolve(__dirname, '../pages/dashboard/index.wxss'), 'utf8');
+  const source = readFileSync(resolve(__dirname, '../pages/dashboard/index.ts'), 'utf8');
+
+  expect(wxml).not.toContain('floating-add');
+  expect(wxss).not.toContain('.floating-add');
+  expect(source).not.toContain('onQuickEntry');
+});
+
+test('home quick actions open the approved photo, manual, ledger, and AI routes', () => {
+  const navigateTo = jest.fn();
+  const switchTab = jest.fn();
+  (globalThis as { wx?: unknown }).wx = { navigateTo, switchTab };
+  const model = new DashboardPageModel({
+    fetchSummary: jest.fn(), fetchAccounts: jest.fn(), fetchCategories: jest.fn(),
+  });
+  const page = createDashboardPage(model);
+
+  page.onPhotoEntry();
+  page.onManualEntry();
+  page.onOpenLedger();
+  page.onOpenAi();
+
+  expect(navigateTo).toHaveBeenNthCalledWith(1, { url: '/pages/entry/photo/index' });
+  expect(navigateTo).toHaveBeenNthCalledWith(2, { url: '/pages/ledger/edit/index' });
+  expect(switchTab).toHaveBeenNthCalledWith(1, { url: '/pages/ledger/index' });
+  expect(switchTab).toHaveBeenNthCalledWith(2, { url: '/pages/ai/index' });
+});
+
 test('routes an unauthenticated app to login and a successful Mock login to the dashboard', async () => {
   expect(resolveInitialRoute(null)).toBe('/pages/login/index');
   const storage = new MemoryStorage();
@@ -42,6 +74,23 @@ test('routes an unauthenticated app to login and a successful Mock login to the 
   await expect(model.login()).resolves.toBe(true);
   expect(navigate).toHaveBeenCalledWith('/pages/dashboard/index');
   expect(resolveInitialRoute(sessions.read())).toBe('/pages/dashboard/index');
+});
+
+test('account password login saves the session and clears the in-memory password', async () => {
+  const storage = new MemoryStorage();
+  const sessions = new SessionStore(storage);
+  const navigate = jest.fn();
+  const passwordApi = { loginWithPassword: jest.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r', householdId: 'h-1' }) };
+  const model = new LoginPageModel({ login: jest.fn() }, sessions, navigate, passwordApi);
+  model.setUsername('allen');
+  model.setPassword('family-secret');
+
+  await expect(model.passwordLogin()).resolves.toBe(true);
+
+  expect(passwordApi.loginWithPassword).toHaveBeenCalledWith({ username: 'allen', password: 'family-secret' });
+  expect(sessions.read()).toEqual({ accessToken: 'a', refreshToken: 'r', householdId: 'h-1' });
+  expect(model.state.password).toBe('');
+  expect(navigate).toHaveBeenCalledWith('/pages/dashboard/index');
 });
 
 test('loads the household cockpit and exposes pending/duplicate/recurring counts', async () => {
@@ -80,6 +129,24 @@ test('formats dashboard amounts before they reach the WXML template', async () =
     termDepositDisplay: 'NZ$500.00',
     incomeDisplay: 'NZ$3000.00',
     expenseDisplay: 'NZ$1800.00',
+  }));
+});
+
+test('formats recent transactions for the home list without WXML arithmetic', async () => {
+  const api = {
+    fetchSummary: jest.fn().mockResolvedValue({
+      ...summary,
+      recentTransactions: [{ id: 'tx-1', accountId: 'primary', direction: 'expense' as const, amountMinor: 8430, occurredAt: '2026-08-30T04:42:00.000Z', merchant: "PAK'nSAVE", version: 0 }],
+    }),
+    fetchAccounts: jest.fn().mockResolvedValue(accounts),
+    fetchCategories: jest.fn().mockResolvedValue(categories),
+  };
+  const model = new DashboardPageModel(api);
+
+  await model.load({ from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' });
+
+  expect(model.state.recentTransactions[0]).toEqual(expect.objectContaining({
+    amountDisplay: '− NZ$84.30', directionLabel: '支出', merchant: "PAK'nSAVE",
   }));
 });
 

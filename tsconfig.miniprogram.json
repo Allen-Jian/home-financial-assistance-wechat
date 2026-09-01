@@ -9,6 +9,6 @@
     "sourceMap": false,
     "declaration": false
   },
-  "include": ["app.ts", "src/**/*.ts", "pages/**/*.ts"],
+  "include": ["app.ts", "src/**/*.ts", "pages/**/*.ts", "custom-tab-bar/**/*.ts"],
   "exclude": []
 }

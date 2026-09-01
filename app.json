@@ -19,38 +19,43 @@
   ],
   "window": {
     "navigationBarTitleText": "家庭手账",
-    "navigationBarBackgroundColor": "#155EEF",
-    "navigationBarTextStyle": "white",
-    "backgroundColor": "#F3F7FF",
+    "navigationBarBackgroundColor": "#FBF7F0",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#FBF7F0",
     "backgroundTextStyle": "light"
   },
-  "permission": {
-    "scope.camera": {
-      "desc": "用于拍照导入账单原件"
-    }
-  },
   "darkmode": true,
+  "themeLocation": "theme.json",
   "tabBar": {
-    "color": "#6B7E9E",
-    "selectedColor": "#155EEF",
+    "custom": true,
+    "color": "#66736E",
+    "selectedColor": "#2F6F64",
     "backgroundColor": "#ffffff",
     "borderStyle": "white",
     "list": [
       {
         "pagePath": "pages/dashboard/index",
-        "text": "首页"
+        "text": "首页",
+        "iconPath": "assets/tabbar/home.png",
+        "selectedIconPath": "assets/tabbar/home-selected.png"
       },
       {
         "pagePath": "pages/ledger/index",
-        "text": "账目"
+        "text": "账目",
+        "iconPath": "assets/tabbar/ledger.png",
+        "selectedIconPath": "assets/tabbar/ledger-selected.png"
       },
       {
         "pagePath": "pages/ai/index",
-        "text": "AI聊天"
+        "text": "AI聊天",
+        "iconPath": "assets/tabbar/ai.png",
+        "selectedIconPath": "assets/tabbar/ai-selected.png"
       },
       {
         "pagePath": "pages/more/index",
-        "text": "设置"
+        "text": "设置",
+        "iconPath": "assets/tabbar/settings.png",
+        "selectedIconPath": "assets/tabbar/settings-selected.png"
       }
     ]
   },

@@ -32,5 +32,4 @@
     <view wx:else class="empty-state"><view class="empty-receipt"></view><text class="empty-title">还没有最近收支</text><text class="empty-copy">从一笔早餐、通勤或收入开始，让账本慢慢有节奏。</text><button class="primary-button" bindtap="onManualEntry">记第一笔</button></view>
   </view>
   <button wx:if="{{insights.length}}" class="insight-strip" bindtap="onOpenAi"><text class="spark-mark">✦</text><view><text>本月关注</text><text>{{insights[0].detail || insights[0].title}}</text></view><text class="chevron">›</text></button>
-  <button class="floating-add" bindtap="onQuickEntry" aria-label="打开记账方式">＋</button>
 </view>

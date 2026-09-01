@@ -20,12 +20,16 @@ export class MorePageModel {
   async logout(): Promise<void> { await this.api.logout(); }
 }
 
-interface PageContext { setData(data: unknown): void }
+interface PageContext {
+  setData(data: unknown): void;
+  getTabBar?(): { setData(data: { selected: number }): void } | undefined;
+}
 interface AppearanceEvent { currentTarget?: { dataset?: { value?: unknown } } }
 
 export function createMorePage(model: MorePageModel, theme?: MoreThemePort) {
   return {
     data: { ...model.state, appearanceOptions: APPEARANCE_OPTIONS, themePersistenceWarning: '' },
+    onShow(this: PageContext) { this.getTabBar?.()?.setData({ selected: 4 }); },
     async exportJson(this: PageContext) { await model.export(currentPeriod(), 'json'); this.setData(model.state); },
     async exportCsv(this: PageContext) { await model.export(currentPeriod(), 'csv'); this.setData(model.state); },
     async logout(this: PageContext) { await model.logout(); wx.reLaunch({ url: '/pages/login/index' }); this.setData(model.state); },

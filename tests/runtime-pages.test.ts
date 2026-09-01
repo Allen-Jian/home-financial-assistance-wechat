@@ -22,7 +22,7 @@ test('dashboard runtime page loads the current period on show and syncs data', a
   expect(context.setData).toHaveBeenCalledWith(model.state);
 });
 
-test('quick entry opens chooser and ledger links switch tab', () => {
+test('dashboard quick actions open entry pages and ledger links switch tab', () => {
   const navigateTo = jest.fn();
   const switchTab = jest.fn();
   (globalThis as { wx?: unknown }).wx = { navigateTo, switchTab };
@@ -32,10 +32,12 @@ test('quick entry opens chooser and ledger links switch tab', () => {
     fetchCategories: jest.fn().mockResolvedValue([]),
   }));
 
-  page.onQuickEntry();
+  page.onPhotoEntry();
+  page.onManualEntry();
   page.onOpenLedger();
 
-  expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/entry/index' });
+  expect(navigateTo).toHaveBeenNthCalledWith(1, { url: '/pages/entry/photo/index' });
+  expect(navigateTo).toHaveBeenNthCalledWith(2, { url: '/pages/ledger/edit/index' });
   expect(switchTab).toHaveBeenCalledWith({ url: '/pages/ledger/index' });
 });
 

@@ -136,7 +136,12 @@ function createOnlineStatus() {
 function createAiPage(model) {
     return {
         data: model.state,
-        async onShow() { await model.hydrate(); this.setData(model.state); },
+        async onShow() {
+            var _a, _b;
+            (_b = (_a = this.getTabBar) === null || _a === void 0 ? void 0 : _a.call(this)) === null || _b === void 0 ? void 0 : _b.setData({ selected: 3 });
+            await model.hydrate();
+            this.setData(model.state);
+        },
         async send(event) { var _a, _b; await model.send((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); this.setData(model.state); },
         onInput(event) { var _a, _b; model.setDraft((_b = (_a = event.detail) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : ''); this.setData(model.state); },
         async sendCurrent() { await model.sendCurrent(); this.setData(model.state); },

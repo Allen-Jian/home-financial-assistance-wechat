@@ -155,10 +155,11 @@ function createDashboardPage(model, period = () => {
     return {
         data: model.state,
         async onShow() {
+            var _a, _b;
+            (_b = (_a = this.getTabBar) === null || _a === void 0 ? void 0 : _a.call(this)) === null || _b === void 0 ? void 0 : _b.setData({ selected: 0 });
             await model.load(period());
             this.setData(model.state);
         },
-        onQuickEntry() { wx.navigateTo({ url: '/pages/entry/index' }); },
         onPhotoEntry() { wx.navigateTo({ url: '/pages/entry/photo/index' }); },
         onManualEntry() { wx.navigateTo({ url: '/pages/ledger/edit/index' }); },
         onOpenLedger() { wx.switchTab({ url: '/pages/ledger/index' }); },

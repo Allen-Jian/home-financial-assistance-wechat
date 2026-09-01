@@ -23,6 +23,7 @@ exports.MorePageModel = MorePageModel;
 function createMorePage(model, theme) {
     return {
         data: { ...model.state, appearanceOptions: exports.APPEARANCE_OPTIONS, themePersistenceWarning: '' },
+        onShow() { var _a, _b; (_b = (_a = this.getTabBar) === null || _a === void 0 ? void 0 : _a.call(this)) === null || _b === void 0 ? void 0 : _b.setData({ selected: 4 }); },
         async exportJson() { await model.export(currentPeriod(), 'json'); this.setData(model.state); },
         async exportCsv() { await model.export(currentPeriod(), 'csv'); this.setData(model.state); },
         async logout() { await model.logout(); wx.reLaunch({ url: '/pages/login/index' }); this.setData(model.state); },
