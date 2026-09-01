@@ -13,6 +13,8 @@ export interface PhotoEntryFile {
   bytes?: Uint8Array;
 }
 
+export type ImageSource = 'camera' | 'album' | 'chat-image';
+
 export interface PhotoEntryApiPort {
   parseDraft?: (input: string) => Promise<DocumentDraft>;
   analyzePhoto?: (input: { filePath: string; fileName: string; contentType: string }) => Promise<DocumentDraft>;
@@ -46,6 +48,17 @@ export interface PhotoEntryState {
 function contentTypeFor(file: PhotoEntryFile): string {
   if (file.contentType) return file.contentType;
   return /\.png$/i.test(file.name) ? 'image/png' : 'image/jpeg';
+}
+
+export function isPickerCancel(error: unknown): boolean {
+  const messages: unknown[] = [];
+  if (typeof error === 'string') messages.push(error);
+  if (error instanceof Error) messages.push(error.message);
+  if (error && typeof error === 'object') {
+    const details = error as { errMsg?: unknown; message?: unknown };
+    messages.push(details.errMsg, details.message);
+  }
+  return messages.some((message) => typeof message === 'string' && (/cancel(?:led|ed)?/i.test(message) || /取消/.test(message)));
 }
 
 const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
@@ -249,29 +262,85 @@ function readFileBytes(path: string): Promise<Uint8Array> {
   }));
 }
 
+interface WxImageFileRuntime {
+  path?: string;
+  tempFilePath?: string;
+  name?: string;
+  size?: number;
+  fileType?: string;
+  type?: string;
+}
+
+class SelectedFileError extends Error {
+  constructor(readonly file: PhotoEntryFile, cause: unknown) {
+    super(cause instanceof Error ? cause.message : '读取文件失败，请重新选择');
+    this.name = 'SelectedFileError';
+  }
+}
+
+function toImageFile(file: WxImageFileRuntime): PhotoEntryFile {
+  const path = file.tempFilePath ?? file.path ?? '';
+  const name = file.name ?? path.split('/').pop() ?? 'receipt.jpg';
+  const rawType = file.fileType ?? file.type;
+  const contentType = rawType === 'png' || /\.png$/i.test(name)
+    ? 'image/png'
+    : 'image/jpeg';
+  return { path, name, size: file.size, contentType };
+}
+
+export function chooseImage(source: ImageSource): Promise<PhotoEntryFile> {
+  return new Promise((resolve, reject) => {
+    const success = async (result: { tempFiles: WxImageFileRuntime[] }) => {
+      const selected = toImageFile(result.tempFiles[0] ?? {});
+      if (!selected.path) {
+        reject(new Error('未选择图片'));
+        return;
+      }
+      try {
+        selected.bytes = await readFileBytes(selected.path);
+        resolve(selected);
+      } catch (error) {
+        reject(new SelectedFileError(selected, error));
+      }
+    };
+    const fail = (error: unknown) => reject(error);
+    if (source === 'chat-image') {
+      wx.chooseMessageFile({ count: 1, type: 'image', success, fail });
+    } else {
+      wx.chooseMedia({
+        count: 1,
+        mediaType: ['image'],
+        sourceType: [source],
+        success,
+        fail,
+      });
+    }
+  });
+}
+
+async function selectImage(model: PhotoEntryPageModel, context: PageContext, source: ImageSource): Promise<void> {
+  try {
+    const selected = await chooseImage(source);
+    const pending = model.analyze(selected);
+    context.setData(model.state);
+    await pending;
+  } catch (error) {
+    if (!isPickerCancel(error)) {
+      if (error instanceof SelectedFileError) model.preserveFileError(error.file, error);
+      else model.state.error = error instanceof Error ? error.message : '图片选择失败，请重试';
+    }
+  }
+  context.setData(model.state);
+}
+
 export function createPhotoEntryPage(model: PhotoEntryPageModel) {
   return {
     data: model.state,
     onLoad(this: PageContext, options: { source?: string } = {}) { model.setSource(options.source); this.setData(model.state); },
-    choosePhoto(this: PageContext) {
-      wx.chooseMedia({
-        count: 1, mediaType: ['image'], sourceType: ['camera'],
-        success: async (result) => {
-          const file = result.tempFiles[0];
-          if (file) {
-            const path = file.tempFilePath ?? file.path ?? '';
-            const selected = { path, name: file.name ?? 'receipt.jpg', size: file.size, contentType: file.fileType === 'png' ? 'image/png' : 'image/jpeg' };
-            try {
-              const pending = model.analyze({ ...selected, bytes: await readFileBytes(path) });
-              this.setData(model.state);
-              await pending;
-            } catch (error) { model.preserveFileError(selected, error); }
-          }
-          this.setData(model.state);
-        },
-        fail: () => this.setData(model.state),
-      });
-    },
+    chooseImage(this: PageContext, source: ImageSource) { return selectImage(model, this, source); },
+    choosePhoto(this: PageContext) { return selectImage(model, this, 'camera'); },
+    chooseAlbum(this: PageContext) { return selectImage(model, this, 'album'); },
+    chooseChatImage(this: PageContext) { return selectImage(model, this, 'chat-image'); },
     chooseBillFile(this: PageContext): Promise<void> {
       return new Promise((resolve) => wx.chooseMessageFile({
         count: 1, type: 'all',

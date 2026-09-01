@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PhotoEntryPageModel = void 0;
+exports.isPickerCancel = isPickerCancel;
+exports.chooseImage = chooseImage;
 exports.createPhotoEntryPage = createPhotoEntryPage;
 const client_1 = require("../../../src/api/client");
 const app_1 = require("../../../app");
@@ -10,6 +12,18 @@ function contentTypeFor(file) {
     if (file.contentType)
         return file.contentType;
     return /\.png$/i.test(file.name) ? 'image/png' : 'image/jpeg';
+}
+function isPickerCancel(error) {
+    const messages = [];
+    if (typeof error === 'string')
+        messages.push(error);
+    if (error instanceof Error)
+        messages.push(error.message);
+    if (error && typeof error === 'object') {
+        const details = error;
+        messages.push(details.errMsg, details.message);
+    }
+    return messages.some((message) => typeof message === 'string' && (/cancel(?:led|ed)?/i.test(message) || /取消/.test(message)));
 }
 const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
 function signatureMatches(file, contentType) {
@@ -230,33 +244,80 @@ function readFileBytes(path) {
         fail: reject,
     }));
 }
+class SelectedFileError extends Error {
+    constructor(file, cause) {
+        super(cause instanceof Error ? cause.message : '读取文件失败，请重新选择');
+        this.file = file;
+        this.name = 'SelectedFileError';
+    }
+}
+function toImageFile(file) {
+    var _a, _b, _c, _d, _e;
+    const path = (_b = (_a = file.tempFilePath) !== null && _a !== void 0 ? _a : file.path) !== null && _b !== void 0 ? _b : '';
+    const name = (_d = (_c = file.name) !== null && _c !== void 0 ? _c : path.split('/').pop()) !== null && _d !== void 0 ? _d : 'receipt.jpg';
+    const rawType = (_e = file.fileType) !== null && _e !== void 0 ? _e : file.type;
+    const contentType = rawType === 'png' || /\.png$/i.test(name)
+        ? 'image/png'
+        : 'image/jpeg';
+    return { path, name, size: file.size, contentType };
+}
+function chooseImage(source) {
+    return new Promise((resolve, reject) => {
+        const success = async (result) => {
+            var _a;
+            const selected = toImageFile((_a = result.tempFiles[0]) !== null && _a !== void 0 ? _a : {});
+            if (!selected.path) {
+                reject(new Error('未选择图片'));
+                return;
+            }
+            try {
+                selected.bytes = await readFileBytes(selected.path);
+                resolve(selected);
+            }
+            catch (error) {
+                reject(new SelectedFileError(selected, error));
+            }
+        };
+        const fail = (error) => reject(error);
+        if (source === 'chat-image') {
+            wx.chooseMessageFile({ count: 1, type: 'image', success, fail });
+        }
+        else {
+            wx.chooseMedia({
+                count: 1,
+                mediaType: ['image'],
+                sourceType: [source],
+                success,
+                fail,
+            });
+        }
+    });
+}
+async function selectImage(model, context, source) {
+    try {
+        const selected = await chooseImage(source);
+        const pending = model.analyze(selected);
+        context.setData(model.state);
+        await pending;
+    }
+    catch (error) {
+        if (!isPickerCancel(error)) {
+            if (error instanceof SelectedFileError)
+                model.preserveFileError(error.file, error);
+            else
+                model.state.error = error instanceof Error ? error.message : '图片选择失败，请重试';
+        }
+    }
+    context.setData(model.state);
+}
 function createPhotoEntryPage(model) {
     return {
         data: model.state,
         onLoad(options = {}) { model.setSource(options.source); this.setData(model.state); },
-        choosePhoto() {
-            wx.chooseMedia({
-                count: 1, mediaType: ['image'], sourceType: ['camera'],
-                success: async (result) => {
-                    var _a, _b, _c;
-                    const file = result.tempFiles[0];
-                    if (file) {
-                        const path = (_b = (_a = file.tempFilePath) !== null && _a !== void 0 ? _a : file.path) !== null && _b !== void 0 ? _b : '';
-                        const selected = { path, name: (_c = file.name) !== null && _c !== void 0 ? _c : 'receipt.jpg', size: file.size, contentType: file.fileType === 'png' ? 'image/png' : 'image/jpeg' };
-                        try {
-                            const pending = model.analyze({ ...selected, bytes: await readFileBytes(path) });
-                            this.setData(model.state);
-                            await pending;
-                        }
-                        catch (error) {
-                            model.preserveFileError(selected, error);
-                        }
-                    }
-                    this.setData(model.state);
-                },
-                fail: () => this.setData(model.state),
-            });
-        },
+        chooseImage(source) { return selectImage(model, this, source); },
+        choosePhoto() { return selectImage(model, this, 'camera'); },
+        chooseAlbum() { return selectImage(model, this, 'album'); },
+        chooseChatImage() { return selectImage(model, this, 'chat-image'); },
         chooseBillFile() {
             return new Promise((resolve) => wx.chooseMessageFile({
                 count: 1, type: 'all',
