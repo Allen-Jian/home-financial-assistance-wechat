@@ -322,3 +322,143 @@ test('direct bill flow rejects oversized and spoofed files before AI analysis', 
   expect(model.state.error).toContain('文件类型');
   expect(previewDocument).not.toHaveBeenCalled();
 });
+
+test('offline image selection preserves the file and draft without API calls, then retries online', async () => {
+  const imageBytes = new Uint8Array([0xff, 0xd8, 0xff]);
+  const chooseMedia = jest.fn(({ success }: { success: (result: { tempFiles: Array<{ tempFilePath: string; fileType: string }> }) => void }) => success({
+    tempFiles: [{ tempFilePath: '/tmp/offline.jpg', fileType: 'image' }],
+  }));
+  let online = false;
+  const analyzePhoto = jest.fn().mockResolvedValue({ amountMinor: 1890, direction: 'expense' });
+  const stageImport = jest.fn().mockResolvedValue({ draftId: 'draft-offline', reused: false });
+  const uploadAttachment = jest.fn().mockResolvedValue({ id: 'attachment-offline' });
+  const confirmDraft = jest.fn();
+  (globalThis as { wx?: unknown }).wx = {
+    chooseMedia,
+    getFileSystemManager: () => ({ readFile: ({ success }: { success: (result: { data: ArrayBuffer }) => void }) => success({ data: imageBytes.buffer }) }),
+  };
+  const model = new PhotoEntryPageModel({ analyzePhoto, stageImport, uploadAttachment, confirmDraft }, () => online);
+  model.state.draft = { amountMinor: 1250, direction: 'expense', merchant: 'Existing' };
+  const page = createPhotoEntryPage(model);
+  const context = { setData: jest.fn() };
+
+  await page.chooseAlbum.call(context);
+
+  expect(model.state.file).toEqual(expect.objectContaining({ path: '/tmp/offline.jpg' }));
+  expect(model.state.draft).toEqual(expect.objectContaining({ merchant: 'Existing' }));
+  expect(model.state.error).toContain('需要联网');
+  expect(analyzePhoto).not.toHaveBeenCalled();
+  expect(stageImport).not.toHaveBeenCalled();
+  expect(uploadAttachment).not.toHaveBeenCalled();
+
+  online = true;
+  await page.retry.call(context);
+
+  expect(analyzePhoto).toHaveBeenCalledTimes(1);
+  expect(stageImport).toHaveBeenCalledTimes(1);
+  expect(uploadAttachment).toHaveBeenCalledTimes(1);
+});
+
+test('retries a failed original upload before confirming a reused staged draft', async () => {
+  const analyzePhoto = jest.fn().mockResolvedValue({ amountMinor: 1890, direction: 'expense' });
+  const stageImport = jest.fn().mockResolvedValue({ draftId: 'draft-upload', reused: true });
+  const uploadAttachment = jest.fn()
+    .mockRejectedValueOnce(new Error('upload failed'))
+    .mockResolvedValueOnce({ id: 'attachment-upload' });
+  const confirmDraft = jest.fn().mockResolvedValue({ id: 'tx-upload' });
+  const model = new PhotoEntryPageModel({ analyzePhoto, stageImport, uploadAttachment, confirmDraft });
+  const file = { path: '/tmp/upload.jpg', name: 'upload.jpg', contentType: 'image/jpeg', bytes: new Uint8Array([0xff, 0xd8, 0xff]) };
+
+  await expect(model.analyze(file)).resolves.toBe(false);
+  expect(stageImport).toHaveBeenCalledTimes(1);
+  expect(uploadAttachment).toHaveBeenCalledTimes(1);
+  await expect(model.retry()).resolves.toBe(true);
+  await expect(model.confirm()).resolves.toBe(true);
+
+  expect(stageImport).toHaveBeenCalledTimes(1);
+  expect(uploadAttachment).toHaveBeenCalledTimes(2);
+  expect(confirmDraft).toHaveBeenCalledTimes(1);
+  expect(uploadAttachment.mock.invocationCallOrder[1]).toBeLessThan(confirmDraft.mock.invocationCallOrder[0]);
+});
+
+test('retry rereads a selected descriptor without bytes before analysis', async () => {
+  const imageBytes = new Uint8Array([0xff, 0xd8, 0xff]);
+  const readFile = jest.fn().mockResolvedValue(imageBytes);
+  const analyzePhoto = jest.fn().mockResolvedValue({ amountMinor: 1890, direction: 'expense' });
+  const stageImport = jest.fn().mockResolvedValue({ draftId: 'draft-reread', reused: false });
+  const model = new PhotoEntryPageModel({ analyzePhoto, stageImport, confirmDraft: jest.fn(), uploadAttachment: jest.fn().mockResolvedValue({}) }, () => true, readFile);
+  model.state.file = { path: '/tmp/reread.jpg', name: 'reread.jpg', contentType: 'image/jpeg' };
+  model.state.originalPreserved = true;
+  model.state.error = 'read failed';
+
+  await expect(model.retry()).resolves.toBe(true);
+
+  expect(readFile).toHaveBeenCalledWith('/tmp/reread.jpg');
+  expect(analyzePhoto).toHaveBeenCalledTimes(1);
+  expect(stageImport).toHaveBeenCalledTimes(1);
+});
+
+test('retry reopens the same picker after a real picker failure before a file exists', async () => {
+  let attempts = 0;
+  const chooseMedia = jest.fn(({ sourceType, success, fail }: { sourceType: string[]; success: (result: { tempFiles: Array<{ tempFilePath: string; fileType: string }> }) => void; fail: (error: unknown) => void }) => {
+    attempts += 1;
+    if (attempts === 1) fail(new Error('camera unavailable'));
+    else success({ tempFiles: [{ tempFilePath: '/tmp/retry.jpg', fileType: 'image' }] });
+  });
+  const analyzePhoto = jest.fn().mockResolvedValue({ amountMinor: 1890, direction: 'expense' });
+  (globalThis as { wx?: unknown }).wx = {
+    chooseMedia,
+    getFileSystemManager: () => ({ readFile: ({ success }: { success: (result: { data: ArrayBuffer }) => void }) => success({ data: new Uint8Array([0xff, 0xd8, 0xff]).buffer }) }),
+  };
+  const model = new PhotoEntryPageModel({ analyzePhoto });
+  const page = createPhotoEntryPage(model);
+  const context = { setData: jest.fn() };
+
+  await page.choosePhoto.call(context);
+  expect(model.state.file).toBeNull();
+  await page.retry.call(context);
+
+  expect(chooseMedia).toHaveBeenCalledTimes(2);
+  expect((chooseMedia.mock.calls[1][0] as { sourceType: string[] }).sourceType).toEqual(['camera']);
+  expect(analyzePhoto).toHaveBeenCalledTimes(1);
+});
+
+test.each([
+  ['PNG', new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), 'image/png'],
+  ['JPEG', new Uint8Array([0xff, 0xd8, 0xff]), 'image/jpeg'],
+])('normalizes %s MIME from bytes when picker metadata and path are opaque', async (_label, bytes, contentType) => {
+  const chooseMedia = jest.fn(({ success }: { success: (result: { tempFiles: Array<{ tempFilePath: string; fileType: string }> }) => void }) => success({
+    tempFiles: [{ tempFilePath: 'wxfile://opaque', fileType: 'image' }],
+  }));
+  const analyzePhoto = jest.fn().mockResolvedValue({ amountMinor: 1890, direction: 'expense' });
+  (globalThis as { wx?: unknown }).wx = {
+    chooseMedia,
+    getFileSystemManager: () => ({ readFile: ({ success }: { success: (result: { data: ArrayBuffer }) => void }) => success({ data: bytes.buffer }) }),
+  };
+  const model = new PhotoEntryPageModel({ analyzePhoto });
+  const page = createPhotoEntryPage(model);
+
+  await page.chooseAlbum.call({ setData: jest.fn() });
+
+  expect(analyzePhoto).toHaveBeenCalledWith(expect.objectContaining({ contentType }));
+  expect(model.state.file?.contentType).toBe(contentType);
+});
+
+test('rejects an opaque image whose bytes have no supported signature', async () => {
+  const analyzePhoto = jest.fn();
+  const chooseMedia = jest.fn(({ success }: { success: (result: { tempFiles: Array<{ tempFilePath: string; fileType: string }> }) => void }) => success({
+    tempFiles: [{ tempFilePath: 'wxfile://opaque', fileType: 'image' }],
+  }));
+  (globalThis as { wx?: unknown }).wx = {
+    chooseMedia,
+    getFileSystemManager: () => ({ readFile: ({ success }: { success: (result: { data: ArrayBuffer }) => void }) => success({ data: new Uint8Array([1, 2, 3]).buffer }) }),
+  };
+  const model = new PhotoEntryPageModel({ analyzePhoto });
+  const page = createPhotoEntryPage(model);
+
+  await page.chooseAlbum.call({ setData: jest.fn() });
+
+  expect(model.state.error).toContain('文件类型');
+  expect(model.state.file).toEqual(expect.objectContaining({ path: 'wxfile://opaque' }));
+  expect(analyzePhoto).not.toHaveBeenCalled();
+});

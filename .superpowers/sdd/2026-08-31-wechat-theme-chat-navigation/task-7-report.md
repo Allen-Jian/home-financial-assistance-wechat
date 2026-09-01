@@ -2,6 +2,12 @@
 
 Status: complete
 
+## Fix round 1 commits
+
+- `cc22b48 feat: finalize sunlit ledger UI contracts` — captured the exact pre-existing Sunlit UI/API-contract dirty and untracked files in an explicit baseline commit; no `.superpowers/sdd` scratch files were included.
+- `7283fa4 feat: add receipt image sources` — added the initial camera/album/chat-image sources and cancellation semantics.
+- The Task 7 fix round is committed separately after the baseline below.
+
 ## Implementation
 
 - Added the `ImageSource` union, shared `chooseImage(source)` adapter, and robust `isPickerCancel(error)` handling for camera, album, and WeChat chat-image picker errors.
@@ -24,3 +30,16 @@ Status: complete
 
 - Task 7 implementation is limited to the photo-entry TypeScript/JavaScript/WXML/WXSS and its focused tests; existing user-owned dirty changes were preserved.
 - WeChat DevTools/device picker permissions, camera/album behavior, and live API/deployment acceptance remain external checks.
+
+## Fix round 1 implementation
+
+- Added an injected online-status gate before image analysis, staging, attachment upload, and confirmation. Offline selection remains local, preserves the selected file/draft, performs zero API analysis/stage/upload/confirm calls, and can retry after connectivity returns.
+- Tracked the staged file hash and content type so a failed original upload is retried against the existing draft before confirmation; confirmation never proceeds while that upload is unresolved.
+- Added path rereading for preserved descriptors without bytes and remembered the last image source so a picker failure can be retried through the same picker action.
+- Normalized image MIME from JPEG/PNG bytes after reading, allowing opaque temporary paths and rejecting unsupported signatures before AI analysis.
+
+## Fix round 1 verification
+
+- RED: production-port tests for offline gating, upload retention, reread/retry, picker retry, and byte-signature MIME normalization failed before the new constructor ports and behavior existed.
+- GREEN: `npm test -- --runInBand tests/photo-entry.test.ts -t "offline|failed original upload|rereads|reopens|normalizes|opaque image"` — PASS, 7 tests.
+- Final clean-HEAD verification after the fix commit: full Jest, typecheck, WeChat build, `git diff --check`, and clean `git status`.
