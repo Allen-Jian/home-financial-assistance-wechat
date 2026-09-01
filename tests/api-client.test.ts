@@ -35,6 +35,15 @@ function makeClient(fake: FakeWx, accessToken = 'access-token') {
 }
 
 describe('ApiClient', () => {
+  test('posts account credentials to the password login endpoint', async () => {
+    const fake = new FakeWx([{ statusCode: 200, data: { accessToken: 'a', refreshToken: 'r', householdId: 'h' } }]);
+    const sessions = new SessionStore(new MemoryStorage());
+    const client = new ApiClient({ baseUrl: 'https://ledger.test/v1', sessions, transport: fake });
+
+    await expect(client.loginWithPassword({ username: 'allen', password: 'secret' })).resolves.toMatchObject({ householdId: 'h' });
+
+    expect(fake.requests[0]).toMatchObject({ url: 'https://ledger.test/v1/auth/login', method: 'POST', data: { username: 'allen', password: 'secret' }, header: {} });
+  });
   test('adds the bearer token to JSON requests', async () => {
     const fake = new FakeWx([{ statusCode: 200, data: { ok: true } }]);
     const { client } = makeClient(fake);

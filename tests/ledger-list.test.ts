@@ -1,8 +1,20 @@
-import { LedgerListPageModel } from '../pages/ledger/index';
+import { createLedgerListPage, LedgerListPageModel } from '../pages/ledger/index';
 import { getPeriodBounds } from '../src/domain/period';
 import { ReadCache } from '../src/cache/read-cache';
 import { ApiError } from '../src/api/client';
 import type { TransactionSummary } from '../src/api/contracts';
+
+test('ledger opens the bank statement reconciliation workbench', () => {
+  const navigateTo = jest.fn();
+  (globalThis as { wx?: unknown }).wx = { navigateTo };
+  const page = createLedgerListPage(new LedgerListPageModel({ fetchTransactions: jest.fn() }));
+
+  page.openBankImport();
+  page.openManualEntry();
+
+  expect(navigateTo).toHaveBeenNthCalledWith(1, { url: '/pages/imports/index?mode=statement' });
+  expect(navigateTo).toHaveBeenNthCalledWith(2, { url: '/pages/ledger/edit/index' });
+});
 
 test('ledger defaults to Auckland month and accepts a custom range', async () => {
   const api = { fetchTransactions: jest.fn().mockResolvedValue([]) };
@@ -26,6 +38,9 @@ test('ledger formats read-only transactions and exposes a selected detail', asyn
 
   await model.load(model.currentPeriod());
   expect(model.state.transactions[0]).toEqual(expect.objectContaining({ amountDisplay: 'NZ$86.40', merchant: '超市' }));
+  expect(model.state).toEqual(expect.objectContaining({
+    incomeDisplay: '+ NZ$0.00', expenseDisplay: '− NZ$86.40', netDisplay: '− NZ$86.40',
+  }));
   model.selectTransaction('tx-1');
   expect(model.state.selectedTransaction).toEqual(transaction);
 });

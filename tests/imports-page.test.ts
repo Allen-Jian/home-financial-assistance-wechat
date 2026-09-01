@@ -18,9 +18,56 @@ function makeModel(files: PickedImportFile[] = [image]) {
     stageImport: jest.fn().mockResolvedValue({ batchId: 'batch-1', draftCount: 1, reused: false, draftId: 'draft-1' }),
     stageAnzCsv: jest.fn().mockResolvedValue({ batchId: 'batch-1', draftCount: 1, reused: false, draftId: 'draft-1' }),
     uploadAttachment: jest.fn().mockResolvedValue({ id: 'attachment-1' }),
+    previewDuplicates: jest.fn().mockResolvedValue([]),
+    confirmDraft: jest.fn().mockResolvedValue({ id: 'tx-1' }),
   };
   return { model: new ImportPageModel(picker, api, () => 'hash-1'), picker, api };
 }
+
+test('statement mode shows analysis then groups matched, duplicate, and missing rows', async () => {
+  const { model, api } = makeModel([csv]);
+  model.setMode('statement');
+  api.previewAnzCsv.mockResolvedValueOnce([
+    { date: '2026-08-15', amountMinor: 1250, direction: 'expense', merchant: 'Matched', sourceFingerprint: 'row-1' },
+    { date: '2026-08-16', amountMinor: 2500, direction: 'expense', merchant: 'Duplicate', sourceFingerprint: 'row-2' },
+    { date: '2026-08-17', amountMinor: 3500, direction: 'expense', merchant: 'Missing', sourceFingerprint: 'row-3' },
+  ]);
+  api.previewDuplicates
+    .mockResolvedValueOnce([{ incomingId: 'row-1', existingId: 'tx-1', score: 100, reasons: ['same-source'] }])
+    .mockResolvedValueOnce([{ incomingId: 'row-2', existingId: 'tx-2', score: 85, reasons: ['date-near'] }])
+    .mockResolvedValueOnce([]);
+
+  const pending = model.chooseCsv();
+  expect(model.state.view).toBe('analyzing');
+  await expect(pending).resolves.toBe(true);
+
+  expect(model.state.view).toBe('results');
+  expect(model.state.matched.map((row) => row.sourceFingerprint)).toEqual(['row-1']);
+  expect(model.state.duplicates.map((row) => row.sourceFingerprint)).toEqual(['row-2']);
+  expect(model.state.missing).toEqual([expect.objectContaining({ sourceFingerprint: 'row-3', selected: true })]);
+  expect(model.state.selectedMissingCount).toBe(1);
+});
+
+test('statement confirmation creates and confirms only selected missing drafts', async () => {
+  const { model, api } = makeModel([csv]);
+  model.setMode('statement');
+  api.previewAnzCsv.mockResolvedValueOnce([
+    { date: '2026-08-17', amountMinor: 3500, direction: 'expense', merchant: 'First', sourceFingerprint: 'row-1' },
+    { date: '2026-08-18', amountMinor: 4500, direction: 'expense', merchant: 'Second', sourceFingerprint: 'row-2' },
+  ]);
+  api.previewDuplicates.mockResolvedValue([]);
+  api.stageImport
+    .mockResolvedValueOnce({ draft: { id: 'draft-1' }, reused: false })
+    .mockResolvedValueOnce({ draft: { id: 'draft-2' }, reused: false });
+  await model.chooseCsv();
+  model.toggleMissing('row-2');
+
+  await expect(model.confirmSelectedMissing()).resolves.toBe(true);
+
+  expect(api.stageImport).toHaveBeenCalledTimes(1);
+  expect(api.stageImport).toHaveBeenCalledWith(expect.objectContaining({ draft: expect.objectContaining({ merchant: 'First' }) }));
+  expect(api.confirmDraft).toHaveBeenCalledWith('draft-1', {});
+});
 
 test('supports image, PDF, and CSV selection in one workbench', async () => {
   const { model, picker } = makeModel([image]);

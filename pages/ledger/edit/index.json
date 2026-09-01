@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "手动记账", "usingComponents": {} }
+{ "navigationStyle": "custom", "navigationBarTitleText": "手动记账", "usingComponents": {} }

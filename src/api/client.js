@@ -168,6 +168,7 @@ class ApiClient {
     removeMember(membershipId) { return this.requestJson('DELETE', `/households/members/${encodeURIComponent(membershipId)}`, undefined, false); }
     exportTransactions(period, format = 'json') { return this.get('/exports/transactions', { ...period, format }); }
     loginWithWechat(input) { return this.post('/auth/wechat/login', input); }
+    loginWithPassword(input) { return this.post('/auth/login', input); }
     async logout() {
         const session = this.options.sessions.read();
         if (!session)

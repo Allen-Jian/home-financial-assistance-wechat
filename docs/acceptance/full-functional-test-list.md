@@ -51,6 +51,14 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 - 线上只读检查：`https://ledger-api.allenjian.fun/v1/health` 返回 200/`{"status":"ok"}`；未带 token 的 `/v1/ai/parse-draft`、`/v1/ai/conversations` 和 `/v1/ai/insights` 返回预期 401。
 - Hostinger 真实 MiniMax 冒烟：`MiniMax-M3` 经中国站端点完成自然语言草稿和只读聊天结构校验；未使用真实家庭财务数据。
 
+## Sunlit UI 执行记录（2026-08-31）
+
+- 小程序：25/25 Jest suites、107/107 tests、TypeScript typecheck、微信构建和 `git diff --check` 通过。
+- 共享 API：25/25 Jest suites、109/109 tests、TypeScript build 和 `git diff --check` 通过；账号密码登录现返回客户端会话所需的 `householdId`。
+- 微信开发者工具：AppID `wxff77e75108c26871` 预览编译成功，WXML 错误 0；首页、账目、三种记账入口、手动记账、AI 聊天、设置页完成模拟器截图检查。
+- UI 静态检查：WXML 不包含 `toFixed`、金额除法或数组方法；结构图标不使用 emoji；按钮触控高度至少 88rpx；浅色/暗色使用统一语义令牌。
+- 本轮没有以真实家庭数据调用线上 API。相机、相册、微信文件、真实 MiniMax 票据解析、暗夜模式真机对比和大字体仍属于真机验收项。
+
 ## 功能清单
 
 ### Task 8 导入入口记录（2026-08-30）
@@ -90,7 +98,7 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 | IMP-05 | 票据 AI 草稿 | 图片/PDF 解析为结构化草稿，确认前不影响余额 | 自动+真实 | 自动通过；真实待测 |
 | IMP-06 | 自然语言草稿 | 中文自然语言进入与票据相同的草稿复核流程 | 自动+真实 | 自动及真实服务边界通过 |
 | IMP-07 | AI 失败恢复 | 解析失败保留原件并允许重试或手填 | 自动+手工 | 自动通过；手工待测 |
-| DRAFT-01 | 草稿确认 | 必须选择合法账户，成功后才入账并写审计 | 自动 | 自动通过 |
+| DRAFT-01 | 草稿确认 | 草稿确认不暴露账户选择；成功后才入账并写审计 | 自动 | 自动通过 |
 | DRAFT-02 | 草稿重复冲突 | 409 时保留草稿与候选，不误删本地状态 | 自动 | 自动通过 |
 | ATT-01 | 附件加密 | AES-256-GCM 保存密文，篡改密文无法解密 | 自动 | 自动通过 |
 | ATT-02 | 附件授权 | 仅所属家庭可上传/读取附件 | 自动 | 自动通过 |
@@ -112,6 +120,7 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 | UI-02 | 页面流程 | 登录、首页、记账、导入、草稿、报表、AI、周期、家庭、更多可操作 | 自动+手工 | 自动通过；手工待测 |
 | UI-03 | 微信编译 | WXML/WXSS/JSON 在开发者工具无编译错误 | 工具+手工 | IDE 编译通过；真机待测 |
 | UI-04 | 真机可用性 | iOS/Android 字体、暗夜、相机、文件、网络错误可用 | 手工 | 待测 |
+| UI-05 | Sunlit 一致性 | 首页、账目、记账、AI、设置使用统一颜色、间距、圆角、空状态和焦点态 | 自动+工具+手工 | 自动与 IDE 通过；真机待测 |
 | OPS-01 | API 构建与 schema | TypeScript 构建、Prisma validate/generate 通过 | 自动 | 自动通过 |
 | OPS-02 | 健康检查 | `/v1/health` 在部署环境返回稳定结果 | 自动+真实 | 自动通过；线上 200 |
 | OPS-03 | HTTPS/合法域名 | TLS 有效，微信 request/upload 合法域名已登记 | 真实 | HTTPS 通过；微信后台待核 |

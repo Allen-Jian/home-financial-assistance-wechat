@@ -17,6 +17,11 @@ export interface WechatLoginResponse extends TokenPair {
   isNewUser: boolean;
 }
 
+export interface PasswordLoginRequest {
+  username: string;
+  password: string;
+}
+
 export interface BreakdownRow {
   label: string;
   direction: Direction;

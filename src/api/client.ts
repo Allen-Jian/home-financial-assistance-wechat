@@ -236,6 +236,7 @@ export class ApiClient {
   removeMember(membershipId: string): Promise<unknown> { return this.requestJson('DELETE' as RequestMethod, `/households/members/${encodeURIComponent(membershipId)}`, undefined, false); }
   exportTransactions(period: Query, format: 'json' | 'csv' = 'json'): Promise<unknown> { return this.get('/exports/transactions', { ...period, format }); }
   loginWithWechat(input: { code: string; inviteCode?: string; householdName?: string }): Promise<WechatLoginResponse> { return this.post('/auth/wechat/login', input); }
+  loginWithPassword(input: { username: string; password: string }): Promise<TokenPair> { return this.post('/auth/login', input); }
   async logout(): Promise<void> {
     const session = this.options.sessions.read();
     if (!session) return;
