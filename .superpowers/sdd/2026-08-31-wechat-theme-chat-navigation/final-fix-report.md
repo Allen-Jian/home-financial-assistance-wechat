@@ -78,6 +78,14 @@
 - Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-7290665` 从提交 `7290665` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
 - DevTools、真机、生产 API/VPS 仍保持 `未执行`；没有 push/deploy。
 
+### Round 5 atomic descriptor timing follow-up
+
+- RED：补充 deferred read 回归后，`npm test -- --runInBand tests/imports-page.test.ts -t "successful picker descriptor"` 失败：picker 已成功返回但可见 file 仍是旧 descriptor，直到额外 microtask 才替换。
+- GREEN：接受当前 picker attempt 后同步递增 accepted revision，并在进入异步 read 前原子激活新 descriptor；旧 content、stage/upload binding、preview 和 reconciliation 状态先清除，read 失败仍只保留新 descriptor。
+- Follow-up code/tests commit：`521782e` (`fix: atomically accept import descriptors`)。
+- 聚焦：`npm test -- --runInBand tests/imports-page.test.ts`：1 suite、29 tests passed。
+- Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-521782e` 从 `521782e` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
+
 ## Round 4 imports final review fixes
 
 ### RED / GREEN 证据
