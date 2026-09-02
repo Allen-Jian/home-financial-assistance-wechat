@@ -81,7 +81,8 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 | NAV-02 | 旧加号清理 | 首页不再显示旧 FAB/旧加号入口 | Jest 检查首页旧 FAB 标记与处理器已移除 | 通过 |
 | NAV-03-AUTO | 中心记账槽调用契约 | 中心槽只调用一次 `navigateTo('/pages/entry/index')`，主 tab `onShow` 恢复选中槽 | Jest 覆盖单次跳转与选中态契约 | 通过 |
 | NAV-03-MANUAL | 中心槽实际交互 | 快速连续点击、进入记账二级页并返回时导航不重复跳转且选中态正确 | 需要 DevTools/真机当前操作；本轮未执行 | 未执行 |
-| AI-01 | 短消息气泡 | 用户右对齐、AI 左对齐，短文本自然收缩 | Jest 覆盖 `.message-row`、`.message-bubble` 结构和宽度规则 | 通过 |
+| AI-01-AUTO | 短消息源码布局契约 | 用户/AI 分别使用左右对齐 class，气泡使用 fit-content 并受 max-width 约束 | Jest 覆盖 `.message-row.user/.assistant`、`.message-bubble` 及对应 WXML/WXSS 源码声明 | 通过 |
+| AI-01-MANUAL | 短消息视觉收缩 | 短文本在微信渲染中自然收缩，不出现整行宽气泡或错位 | 需要 DevTools/真机当前视觉检查；本轮未执行 | 未执行 |
 | AI-02-AUTO | 长消息气泡结构契约 | 长文本允许换行，scope/insight/citation 保持在同一 AI 气泡内 | Jest 覆盖 WXML 结构、WXSS 最大宽度和换行规则 | 通过 |
 | AI-02-MANUAL | 长消息视觉换行 | 真正的长回答在微信渲染中换行且不挤压引用内容 | 需要 DevTools/真机当前视觉检查；本轮未执行 | 未执行 |
 | AI-03-AUTO | 键盘布局契约 | 键盘高度、inset、生命周期和 `chat-end` 锚点计算正确 | Jest 覆盖模型契约与回调注册/解绑 | 通过 |

@@ -39,7 +39,7 @@ git diff --check
 
 输出：退出码 0，无 whitespace error。
 
-验收清单：`docs/acceptance/full-functional-test-list.md` 已新增 `2026-08-31 主题、AI 聊天、图片来源与自定义导航` 矩阵。自动化与视觉/平台项目已拆分：自动化契约使用 `通过`，视觉/输入法/真实图片选择器使用 `未执行`；生产授权说明放在证据/限制栏，生产项目状态为 `未执行`。
+验收清单：`docs/acceptance/full-functional-test-list.md` 已新增 `2026-08-31 主题、AI 聊天、图片来源与自定义导航` 矩阵。自动化与视觉/平台项目已拆分：源码契约（包括用户/AI 对齐 class、fit-content/max-width 声明）使用 `通过`，短消息真实视觉收缩、输入法/真实图片选择器使用 `未执行`；生产授权说明放在证据/限制栏，生产项目状态为 `未执行`。
 
 ## 共享 API 只读核验
 
