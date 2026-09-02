@@ -73,20 +73,20 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 | AUTO-04 | 工作树检查 | 无 whitespace error，提交前状态可核对 | `git diff --check fd2de0c..HEAD`：退出码 0；另执行 `git diff --check`，本轮开始于 clean HEAD | 通过 |
 | AUTO-05 | 生产连接运行层 | 未确认/失败/none 时 request/upload 均为零，恢复在线后才放行并可 dispose | `tests/runtime-bootstrap.test.ts` 覆盖 pending callback、query fail、none、restore 与真实 `createAppRuntime` API transport | 通过 |
 | AUTO-06 | 异步写入竞态与重试安全 | AI 发送/清除、图片草稿绑定/确认、原件上传失败重试均不越过人工确认边界 | `tests/ai-page.test.ts`、`tests/photo-entry.test.ts`、`tests/imports-page.test.ts` deferred 回归覆盖；imports 本轮 31 tests 全绿，含 terminal keep-both 与 picker accepted-state 即时页面渲染 | 通过 |
-| THEME-01 | 浅色主题 | 页面、tabBar、原生栏和回弹色保持浅色令牌 | 自动化 source/runtime contract 已验证 `frontColor: '#000000'`；实际 DevTools/设备视觉仍待当前构建验收 | 未执行 |
-| THEME-02 | 暗夜主题 | 页面、tabBar、原生栏和回弹色保持暗色令牌 | 自动化 source/runtime contract 已验证 `frontColor: '#ffffff'`；实际 DevTools/设备原生栏截图仍待当前构建验收 | 未执行 |
+| THEME-01 | 浅色主题 | 页面、tabBar、原生栏和回弹色保持浅色令牌 | 自动化 source/runtime contract 已验证 `frontColor: '#000000'`；局部 DevTools 页面/原生栏/tab 证据见 `THEME-01-DEVTOOLS`，回弹与设备验收仍未执行 | 未执行 |
+| THEME-02 | 暗夜主题 | 页面、tabBar、原生栏和回弹色保持暗色令牌 | 自动化 source/runtime contract 已验证 `frontColor: '#ffffff'`；局部 DevTools 页面/原生栏证据见 `THEME-02-DEVTOOLS`，回弹与设备验收仍未执行 | 未执行 |
 | THEME-03 | 跟随系统主题 | 系统浅/深色变化后页面与原生区域同步 | 本轮未连接 DevTools 或设备 | 未执行 |
-| THEME-04 | 主题重启持久化 | 选择主题后重启小程序仍恢复该偏好 | 本轮未连接 DevTools 或设备；自动化只覆盖运行层契约 | 未执行 |
+| THEME-04 | 主题重启持久化 | 选择主题后重启小程序仍恢复该偏好 | compile/reload 局部 DevTools 证据见 `THEME-04-DEVTOOLS`；设备重启验收仍未执行 | 未执行 |
 | UI-01 | 原生栏与安全区 | navigation/background 原生色、底部安全区在三主题下正确 | navigation/background source/runtime contract 已自动验证；仍需 DevTools/真机当前截图或录屏确认原生栏与安全区 | 未执行 |
 | UI-02 | 上下回弹 | 页面上下回弹背景与主题一致，不出现白边或遮挡 | 需要 DevTools/真机当前操作 | 未执行 |
 | NAV-01 | 五槽自定义导航 | 固定显示：首页、账目、记账、AI 聊天、设置 | Jest 静态/行为测试覆盖五槽和真实 tab 路径 | 通过 |
 | NAV-02 | 旧加号清理 | 首页不再显示旧 FAB/旧加号入口 | Jest 检查首页旧 FAB 标记与处理器已移除 | 通过 |
 | NAV-03-AUTO | 中心记账槽调用契约 | 中心槽只调用一次 `navigateTo('/pages/entry/index')`，主 tab `onShow` 恢复选中槽 | Jest 覆盖单次跳转与选中态契约 | 通过 |
-| NAV-03-MANUAL | 中心槽实际交互 | 快速连续点击、进入记账二级页并返回时导航不重复跳转且选中态正确 | 需要 DevTools/真机当前操作；本轮未执行 | 未执行 |
+| NAV-03-MANUAL | 中心槽实际交互 | 快速连续点击、进入记账二级页并返回时导航不重复跳转且选中态正确 | 当前 DevTools 精确路径证据见 `NAV-03-DEVTOOLS`；真机交互仍未执行 | 未执行 |
 | AI-01-AUTO | 短消息源码布局契约 | 用户/AI 分别使用左右对齐 class，气泡使用 fit-content 并受 max-width 约束 | Jest 覆盖 `.message-row.user/.assistant`、`.message-bubble` 及对应 WXML/WXSS 源码声明 | 通过 |
-| AI-01-MANUAL | 短消息视觉收缩 | 短文本在微信渲染中自然收缩，不出现整行宽气泡或错位 | 需要 DevTools/真机当前视觉检查；本轮未执行 | 未执行 |
+| AI-01-MANUAL | 短消息视觉收缩 | 短文本在微信渲染中自然收缩，不出现整行宽气泡或错位 | 当前 DevTools 精确截图证据见 `AI-01-DEVTOOLS`；设备视觉仍未执行 | 未执行 |
 | AI-02-AUTO | 长消息气泡结构契约 | 长文本允许换行，scope/insight/citation 保持在同一 AI 气泡内 | Jest 覆盖 WXML 结构、WXSS 最大宽度和换行规则 | 通过 |
-| AI-02-MANUAL | 长消息视觉换行 | 真正的长回答在微信渲染中换行且不挤压引用内容 | 需要 DevTools/真机当前视觉检查；本轮未执行 | 未执行 |
+| AI-02-MANUAL | 长消息视觉换行 | 真正的长回答在微信渲染中换行且不挤压引用内容 | 当前 DevTools 精确截图证据见 `AI-02-DEVTOOLS`；设备视觉仍未执行 | 未执行 |
 | AI-03-AUTO | 键盘布局契约 | 键盘高度、inset、生命周期和 `chat-end` 锚点计算正确 | Jest 覆盖模型契约与回调注册/解绑；闭合态按 112rpx tab + 43rpx raised action protrusion + 21rpx gap = 176rpx，并在 320/375/428px 宽度验证 | 通过 |
 | AI-03-MANUAL | 键盘、输入法与多行 | 键盘出现/收起、输入法和多行输入时输入框可见并滚到最新消息 | 需要 DevTools/真机当前输入操作；本轮未执行 | 未执行 |
 | IMAGE-01-AUTO | 相机来源调用契约 | `chooseMedia` 使用 camera-only 并进入统一识别草稿链 | Jest mock 覆盖来源参数与统一分析路径；真实相机另行验收 | 通过 |
@@ -94,7 +94,17 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 | IMAGE-03-AUTO | 微信聊天图片调用契约 | `chooseMessageFile({ type: 'image' })` 并进入统一识别草稿链 | Jest mock 覆盖调用参数；真实微信文件选择器另行验收 | 通过 |
 | IMAGE-04-AUTO | 取消逻辑契约 | 三种来源的 cancel 错误均不 toast、不清状态、不分析 | Jest mock 覆盖 cancel 语义与无副作用 | 通过 |
 | IMAGE-05-MANUAL | 图片来源与权限交互 | 真实相机、相册、微信聊天图片选择、权限拒绝和取消均表现正确 | 需要 DevTools/真机当前操作；本轮未执行 | 未执行 |
-| DEVTOOLS-01 | 微信开发者工具 | 三主题、原生栏/回弹、五槽、旧加号、气泡、键盘、多行、三图片来源均可操作 | 本轮没有新的当前 DevTools 会话或日志；历史记录不作为本轮证据 | 未执行 |
+| DEVTOOLS-01-COMPILE | DevTools 编译与 WXML | 当前工程在指定开发者工具与基础库中编译成功且无 WXML 错误 | 2026-09-03：IDE MCP 0.9.16、基础库 2.33.0；compile succeeded，WXML errors=[]。通用 npm warning 不适用（项目没有 `miniprogram/` 目录）；仅有工具 Node punycode deprecation | 通过 |
+| DEVTOOLS-02-CONSOLE | DevTools 运行时控制台 | 运行时观察窗口内无 error/warning/exception | 2026-09-03：runtime console inspector 观察 8 秒，errors=0、warnings=0、exceptions=0 | 通过 |
+| THEME-01-DEVTOOLS | 浅色页面/原生栏/tabBar | 浅色页面、原生栏和 tabBar 截图与浅色令牌一致 | 2026-09-03：settings 页 system/light→dark→light 切换时 page_data 匹配令牌/class；重编译后 light settings 截图的页面、原生栏、tab 均为浅色 | 通过 |
+| THEME-02-DEVTOOLS | 暗色页面/原生栏 | 暗色页面与原生栏截图使用暗色令牌 | 2026-09-03：重编译 `fc347ee` 后 login dark 截图同时显示暗色页面与暗色原生栏；page_data 令牌/class 匹配 | 通过 |
+| THEME-04-DEVTOOLS | 暗色偏好重载持久化 | compile/reload 后仍恢复已选暗色偏好 | 2026-09-03：compile/reload 后 login page_data 的 preference/resolved 均为 dark | 通过 |
+| NAV-03-DEVTOOLS | 中心记账槽快速点击与返回 | 中心槽快速重复点击只进入一个记账页，返回后恢复设置页选中态 | 2026-09-03：五槽 label 与 selected=4 已检查；连续调用 center `openEntry` 两次后 stack depth=2，navigateBack 后 depth=1、settings selected=4、openingEntry=false | 通过 |
+| AI-01-DEVTOOLS | 短消息视觉收缩 | 短用户消息在微信渲染中自然收缩并右对齐 | 2026-09-03：AI 截图中用户 `hi` 气泡自然宽度、右对齐 | 通过 |
+| AI-02-DEVTOOLS | 长消息视觉换行 | 长 AI 回答左对齐换行，结构化 insight 保持在气泡内 | 2026-09-03：AI 截图中长 assistant 消息左侧换行，insight 结构块保持可见 | 通过 |
+| AI-03-DEVTOOLS | 闭合 composer 与 raised action | 闭合输入框不遮挡中心 raised 记账槽 | 2026-09-03：重编译 `e5b1dd4` 后 AI 截图显示中心 plus，composer 与 raised action 无重叠 | 通过 |
+| IMAGE-05-CONTROLS-DEVTOOLS | 图片页入口布局 | 图片页主相机入口与相册/聊天图片次级入口对齐 | 2026-09-03：photo 页截图显示 camera primary 与 album/chat secondary controls 对齐；实际 picker、权限与取消未调用 | 通过 |
+| DEVTOOLS-01 | 微信开发者工具 | 三主题、原生栏/回弹、五槽、旧加号、气泡、键盘、多行、三图片来源均可操作 | 已记录的局部 compile/runtime/theme/navigation/AI/photo 证据见精确子行；回弹、系统事件、键盘、实际 picker 和完整 composite 仍未执行 | 未执行 |
 | DEVICE-01 | 真机验收 | iOS/Android 完成主题、输入法、相机/相册/聊天图片、网络错误和安全区验收 | 本轮没有连接真机或采集设备证据 | 未执行 |
 | API-LOCAL-01 | 共享 API 本地 null scope 修复 | MiniMax 返回 null scope 时由服务端使用可信报告期间，输出 `scope.from/to` 字符串 | 只读检查 `D:\self\家庭手账APP\apps\api\src\ai\minimax.client.ts` 与 `ai-chat.service.ts`；AI 相关 2 suites/12 tests、完整 25 suites/110 tests、`npm run build` 均通过。API 工作树原有用户改动保持不动 | 通过 |
 | API-PROD-01 | 生产 `/v1/ai/chat` | 授权后重建并重启 api，再用空账本和有账目家庭验证 HTTP 200、字符串 scope、只读回答和授权引用 | 本轮未访问或重启 VPS；生产 502 仍在授权门槛，必须用户明确授权“仅重建并发布 VPS API 服务”后才能继续 | 未执行 |

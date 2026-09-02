@@ -173,3 +173,20 @@
 - `git diff --check` 与 `git diff --check fd2de0c..HEAD`：均 exit 0（最终文档提交后复核）。
 - Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-e5b1dd4` 从 `e5b1dd4` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
 - AI-03-AUTO 已更新为 224 tests 与 176rpx clearance 证据；实际 DevTools/真机截图仍由父任务复核，`AI-03-MANUAL`、`DEVTOOLS-01` 及相关手工行保持 `未执行`。没有 push/deploy。
+
+## DevTools evidence update (2026-09-03 09:52 +12:00)
+
+### Current live evidence
+
+- IDE MCP 0.9.16、微信基础库 2.33.0；compile succeeded，WXML errors=[]。通用 npm warning 不适用：本项目没有 `miniprogram/` 目录；仅观察到工具 Node 的 punycode deprecation。
+- Runtime console inspector 持续观察 8 秒：0 errors、0 warnings、0 exceptions。
+- Settings live flow 从 system/light 切换 dark 再回 light，page_data 与令牌/class 匹配。重编译 `fc347ee` 后，login dark 截图同时显示暗色页面与暗色原生栏；light settings 截图同时显示浅色页面、原生栏和 tab。dark preference 在 compile/reload 后仍由 login page_data 的 preference/resolved 恢复为 dark。旧构建原生栏保持浅色、手动精确小写 `#ffffff` 可立即修复的观察与 `fc347ee` 修复方向一致。
+- Custom tab live flow 检查五个 slot/label 与 selected=4；center `openEntry` 连续调用两次后 stack depth=2（settings + 一个 entry），navigateBack 后 depth=1、settings selected=4、openingEntry=false。
+- AI 截图显示用户 `hi` 气泡自然宽度右对齐，长 assistant 消息左侧换行且 insight 结构块可见；重编译 `e5b1dd4` 后中心 plus 可见，composer 未遮挡 raised action。
+- Photo 页截图显示 camera primary 与 album/chat secondary controls 对齐；实际 picker 未调用。
+
+### Acceptance boundary
+
+- 矩阵新增的精确 DevTools compile、console、浅/暗主题页面与原生栏、暗色偏好 reload、中心槽快速点击返回、AI 气泡/raised action 和图片入口布局行已标记 `通过`；AUTO-01 保持 29 suites、224 tests。
+- 包含回弹、系统主题事件、真实键盘/输入法、实际相机/相册/聊天图片 picker 权限与取消、overscroll 手势及设备操作的 composite/manual 行仍为 `未执行`；真机和生产 API/VPS 也未执行。没有把局部截图证据升级为整体 DEVTOOLS-01 或 DEVICE-01 通过。
+- 本次 DevTools 截图为临时观察证据，未加入 Git；无生产/VPS 操作、push 或 deploy。
