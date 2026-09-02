@@ -73,6 +73,8 @@ class ApiClient {
         return this.requestJson('PATCH', path, body, false);
     }
     upload(path, file) {
+        if (this.options.connectivity && !this.options.connectivity.isOnline())
+            return Promise.reject(this.offlineError());
         const session = this.options.sessions.read();
         const header = session ? { Authorization: `Bearer ${session.accessToken}` } : {};
         return new Promise((resolve, reject) => {
@@ -197,6 +199,8 @@ class ApiClient {
         }
     }
     rawRequest(method, path, data) {
+        if (this.options.connectivity && !this.options.connectivity.isOnline())
+            return Promise.reject(this.offlineError());
         const session = this.options.sessions.read();
         const header = session ? { Authorization: `Bearer ${session.accessToken}` } : {};
         return new Promise((resolve, reject) => {
@@ -253,6 +257,9 @@ class ApiClient {
     toApiError(statusCode, data) {
         const result = responseMessage(data, statusCode);
         return new ApiError(statusCode, errorCode(statusCode), result.message, result.details);
+    }
+    offlineError() {
+        return new ApiError(0, 'network', 'network unavailable until connectivity is confirmed');
     }
     url(path, query) {
         const base = this.options.baseUrl.replace(/\/$/, '');

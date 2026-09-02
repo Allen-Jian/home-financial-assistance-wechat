@@ -57,10 +57,24 @@ test('switches ordinary slots and opens the entry route once for rapid center ta
   component.methods.openEntry.call(context);
   component.methods.openEntry.call(context);
 
-  expect(switchTab).toHaveBeenCalledWith({ url: '/pages/ledger/index' });
+  expect(switchTab).toHaveBeenCalledWith(expect.objectContaining({ url: '/pages/ledger/index' }));
   expect(navigateTo).toHaveBeenCalledTimes(1);
   expect(navigateTo).toHaveBeenCalledWith({ url: '/pages/entry/index', complete: expect.any(Function) });
   expect(context.setData).toHaveBeenCalledWith({ selected: 1 });
+});
+
+test('rolls back an optimistic selection when switchTab fails', () => {
+  const switchTab = jest.fn((options: { fail?: () => void }) => options.fail?.());
+  (globalThis as { wx?: unknown }).wx = { switchTab, navigateTo: jest.fn() };
+  const component = loadCustomTabBar().createCustomTabBar();
+  const context = { data: { ...component.data, selected: 0 }, setData: jest.fn() } as any;
+  context.setData.mockImplementation((data: Record<string, unknown>) => Object.assign(context.data, data));
+
+  component.methods.selectTab.call(context, { currentTarget: { dataset: { index: 1 } } });
+
+  expect(switchTab).toHaveBeenCalledWith({ url: '/pages/ledger/index', success: expect.any(Function), fail: expect.any(Function) });
+  expect(context.data.selected).toBe(0);
+  expect(context.setData).toHaveBeenLastCalledWith({ selected: 0 });
 });
 
 test('releases the entry guard after completion and after a synchronous navigation throw', () => {

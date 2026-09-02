@@ -77,7 +77,8 @@ function isMessage(value: unknown): value is AiMessage {
 
 export class AiPageModel {
   readonly state: AiPageState;
-  private hydrationRequest = 0;
+  private operationEpoch = 0;
+  private inFlightSend: Promise<boolean> | null = null;
 
   constructor(
     private readonly api: AiApiPort,
@@ -104,8 +105,10 @@ export class AiPageModel {
 
   async hydrate(isCurrent: () => boolean = () => true): Promise<void> {
     if (!this.isOnline() || !this.api.listAiConversations) return;
-    const request = ++this.hydrationRequest;
-    const shouldApply = () => request === this.hydrationRequest && isCurrent();
+    this.inFlightSend = null;
+    this.state.loading = false;
+    const epoch = ++this.operationEpoch;
+    const shouldApply = () => epoch === this.operationEpoch && isCurrent();
     try {
       const conversations = await this.api.listAiConversations();
       if (!shouldApply()) return;
@@ -132,33 +135,47 @@ export class AiPageModel {
     }
   }
 
-  async send(message: string): Promise<boolean> {
+  send(message: string): Promise<boolean> {
     const value = message.trim();
-    if (!value) return false;
-    if (!this.isOnline()) { this.state.error = copy.networkRequired; return false; }
+    if (!value) return Promise.resolve(false);
+    if (!this.isOnline()) { this.state.error = copy.networkRequired; return Promise.resolve(false); }
+    if (this.inFlightSend) return this.inFlightSend;
+    const epoch = ++this.operationEpoch;
     this.state.loading = true;
     this.state.error = '';
     this.state.messages.push({ role: 'user', content: value });
     this.persist();
-    try {
-      const result = await this.api.askAi({ conversationId: this.state.conversationId || undefined, message: value });
-      this.state.conversationId = result.conversationId || this.state.conversationId;
-      this.state.messages.push({ role: 'assistant', content: result.answer, scope: result.scope, citations: (result.citations ?? []).map(citationDisplay), insights: result.insights ?? [] });
-      this.persist();
-      return true;
-    } catch (error) {
-      if (error instanceof ApiError && error.statusCode === 401) {
-        this.navigate('/pages/login/index');
-        this.state.error = copy.loginExpired;
-      } else if (error instanceof ApiError && error.statusCode === 409) {
-        this.state.error = copy.duplicateConflict;
-      } else if (error instanceof ApiError && error.code === 'timeout') {
-        this.state.error = copy.requestTimeout;
-      } else {
-        this.state.error = error instanceof Error ? error.message : copy.aiFailed;
+    const pending = (async (): Promise<boolean> => {
+      const isCurrent = () => epoch === this.operationEpoch;
+      try {
+        const result = await this.api.askAi({ conversationId: this.state.conversationId || undefined, message: value });
+        if (!isCurrent()) return false;
+        this.state.conversationId = result.conversationId || this.state.conversationId;
+        this.state.messages.push({ role: 'assistant', content: result.answer, scope: result.scope, citations: (result.citations ?? []).map(citationDisplay), insights: result.insights ?? [] });
+        this.persist();
+        return true;
+      } catch (error) {
+        if (!isCurrent()) return false;
+        if (error instanceof ApiError && error.statusCode === 401) {
+          this.navigate('/pages/login/index');
+          this.state.error = copy.loginExpired;
+        } else if (error instanceof ApiError && error.statusCode === 409) {
+          this.state.error = copy.duplicateConflict;
+        } else if (error instanceof ApiError && error.code === 'timeout') {
+          this.state.error = copy.requestTimeout;
+        } else {
+          this.state.error = error instanceof Error ? error.message : copy.aiFailed;
+        }
+        return false;
+      } finally {
+        if (isCurrent()) this.state.loading = false;
       }
-      return false;
-    } finally { this.state.loading = false; }
+    })();
+    this.inFlightSend = pending;
+    pending.then(() => {
+      if (this.inFlightSend === pending) this.inFlightSend = null;
+    });
+    return pending;
   }
 
   setDraft(value: string): void { this.state.draft = value; }
@@ -170,10 +187,13 @@ export class AiPageModel {
   }
 
   deleteHistory(): Promise<boolean> {
-    this.hydrationRequest += 1;
+    this.operationEpoch += 1;
+    this.inFlightSend = null;
     const conversationId = this.state.conversationId;
     this.state.messages = [];
     this.state.conversationId = '';
+    this.state.loading = false;
+    this.state.error = '';
     this.storage.removeStorageSync(AI_CHAT_STORAGE_KEY);
     if (!conversationId || !this.api.deleteAiConversation) return Promise.resolve(true);
     return this.api.deleteAiConversation(conversationId).then((result) => result.deleted).catch(() => false);
@@ -211,8 +231,6 @@ interface PageContext {
 }
 
 interface WxNetworkRuntime {
-  getNetworkType(options: { success: (result: { networkType?: string }) => void; fail?: () => void }): void;
-  onNetworkStatusChange?(listener: (result: { isConnected?: boolean; networkType?: string }) => void): void;
   reLaunch(options: { url: string }): void;
   onKeyboardHeightChange?(listener: (result: { height?: number }) => void): void;
   offKeyboardHeightChange?(listener: (result: { height?: number }) => void): void;
@@ -226,13 +244,6 @@ interface WxNetworkRuntime {
 }
 
 declare const wx: WxNetworkRuntime;
-
-function createOnlineStatus(): () => boolean {
-  let online = true;
-  wx.getNetworkType({ success: (result) => { online = result.networkType !== 'none'; }, fail: () => { online = false; } });
-  wx.onNetworkStatusChange?.((result) => { online = result.isConnected !== false && result.networkType !== 'none'; });
-  return () => online;
-}
 
 function wxRuntime(): WxNetworkRuntime | undefined {
   return typeof wx === 'undefined' ? undefined : wx;
@@ -402,6 +413,6 @@ declare function Page(options: Record<string, unknown>): void;
 declare function getApp<T>(): unknown;
 if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
   const runtime = getRuntime();
-  const model = new AiPageModel(runtime.api, createOnlineStatus(), (route) => wx.reLaunch({ url: route }), runtime.storage);
+  const model = new AiPageModel(runtime.api, () => runtime.connectivity.isOnline(), (route) => wx.reLaunch({ url: route }), runtime.storage);
   Page(withThemePage(createAiPage(model), runtime.theme));
 }

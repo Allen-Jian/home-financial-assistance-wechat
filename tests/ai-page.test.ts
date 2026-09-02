@@ -17,6 +17,7 @@ const answer = {
   scope: { from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' },
   citations: [{ transactionId: 'tx-1', occurredAt: '2026-08-15T00:00:00.000Z', amountMinor: 1250, merchant: 'Market' }],
 };
+const fullAnswer = { ...answer, conversationId: 'c-1', insights: [] };
 
 test('exposes the three read-only quick questions', () => {
   expect(QUICK_QUESTIONS).toEqual(['本月花最多的分类？', '找出异常支出', '比较本季与上季']);
@@ -486,4 +487,82 @@ test('renders message bubbles with structured read-only assistant content', () =
   expect(wxss).toMatch(/\.message-bubble\s*\{[^}]*width:\s*(?:fit-content|max-content|auto)/);
   expect(wxss).not.toMatch(/\.message-bubble\s*\{[^}]*;\s*width:\s*(?:78%|100%)/);
   expect(wxss).toMatch(/overflow-wrap:\s*anywhere/);
+});
+
+test('a local send invalidates pending hydration before it can replace the new message', async () => {
+  const storage = new MemoryStorage();
+  let resolveHydration!: (value: AiConversationSummary[]) => void;
+  let resolveAnswer!: (value: typeof fullAnswer) => void;
+  const api = {
+    listAiConversations: jest.fn(() => new Promise<AiConversationSummary[]>((resolve) => { resolveHydration = resolve; })),
+    askAi: jest.fn(() => new Promise<typeof fullAnswer>((resolve) => { resolveAnswer = resolve; })),
+  };
+  const model = new AiPageModel(api, () => true, jest.fn(), storage);
+  const hydration = model.hydrate();
+  const sending = model.send('新问题');
+
+  resolveAnswer(fullAnswer);
+  await expect(sending).resolves.toBe(true);
+  resolveHydration([{ id: 'old', updatedAt: 'old', expiresAt: 'old', messages: [{ role: 'assistant', contentJson: { answer: '旧历史' } }] }]);
+  await hydration;
+  expect(model.state.messages).toEqual([
+    expect.objectContaining({ role: 'user', content: '新问题' }),
+    expect.objectContaining({ role: 'assistant', content: answer.answer }),
+  ]);
+  expect(storage.getStorageSync(AI_CHAT_STORAGE_KEY)).not.toContain('旧历史');
+});
+
+test('a hydration result that resolves before the send response cannot overwrite the send', async () => {
+  const storage = new MemoryStorage();
+  let resolveHydration!: (value: AiConversationSummary[]) => void;
+  let resolveAnswer!: (value: typeof fullAnswer) => void;
+  const api = {
+    listAiConversations: jest.fn(() => new Promise<AiConversationSummary[]>((resolve) => { resolveHydration = resolve; })),
+    askAi: jest.fn(() => new Promise<typeof fullAnswer>((resolve) => { resolveAnswer = resolve; })),
+  };
+  const model = new AiPageModel(api, () => true, jest.fn(), storage);
+  const hydration = model.hydrate();
+  const sending = model.send('新问题');
+  resolveHydration([{ id: 'old', updatedAt: 'old', expiresAt: 'old', messages: [{ role: 'assistant', contentJson: { answer: '旧历史' } }] }]);
+  await hydration;
+  resolveAnswer(fullAnswer);
+  await expect(sending).resolves.toBe(true);
+
+  expect(model.state.messages.map((message) => message.content)).toEqual(['新问题', answer.answer]);
+});
+
+test('clearing history invalidates a pending send response and rejection', async () => {
+  let settle!: (value: typeof fullAnswer) => void;
+  let reject!: (error: Error) => void;
+  const askAi = jest.fn(() => new Promise<typeof fullAnswer>((resolve, fail) => { settle = resolve; reject = fail; }));
+  const storage = new MemoryStorage();
+  const model = new AiPageModel({ askAi }, () => true, jest.fn(), storage);
+  const sending = model.send('待清除');
+  await model.deleteHistory();
+  settle(fullAnswer);
+  await expect(sending).resolves.toBe(false);
+  expect(model.state.messages).toEqual([]);
+  expect(storage.getStorageSync(AI_CHAT_STORAGE_KEY)).toBeUndefined();
+
+  const second = model.send('再次待清除');
+  await model.deleteHistory();
+  reject(new Error('late failure'));
+  await expect(second).resolves.toBe(false);
+  expect(model.state.error).toBe('');
+  expect(model.state.messages).toEqual([]);
+  expect(storage.getStorageSync(AI_CHAT_STORAGE_KEY)).toBeUndefined();
+});
+
+test('concurrent sends are single-flight and append only one user/assistant pair', async () => {
+  let resolveAnswer!: (value: typeof fullAnswer) => void;
+  const askAi = jest.fn(() => new Promise<typeof fullAnswer>((resolve) => { resolveAnswer = resolve; }));
+  const model = new AiPageModel({ askAi }, () => true, jest.fn(), new MemoryStorage());
+
+  const first = model.send('第一个问题');
+  const second = model.send('第二个问题');
+  expect(second).toBe(first);
+  resolveAnswer(fullAnswer);
+  await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+  expect(askAi).toHaveBeenCalledTimes(1);
+  expect(model.state.messages.map((message) => message.content)).toEqual(['第一个问题', answer.answer]);
 });

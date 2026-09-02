@@ -138,3 +138,38 @@ test('stages nested CSV batches without uploading a batch as a draft attachment'
   expect(api.stageAnzCsv).toHaveBeenCalledTimes(1);
   expect(api.uploadAttachment).not.toHaveBeenCalled();
 });
+
+test('caches a staged draft separately and retries an original upload after failure', async () => {
+  const { model, api } = makeModel([image]);
+  api.uploadAttachment
+    .mockRejectedValueOnce(new Error('first upload failed'))
+    .mockResolvedValueOnce({ id: 'attachment-retry' });
+
+  await model.choosePhoto();
+  await expect(model.stage()).resolves.toBe(false);
+  expect(model.state.error).toContain('first upload failed');
+  expect(model.state.stageResult).toEqual(expect.objectContaining({ draftId: 'draft-1' }));
+  expect(model.state.uploaded).toBe(false);
+
+  await expect(model.stage()).resolves.toBe(true);
+  expect(api.stageImport).toHaveBeenCalledTimes(1);
+  expect(api.uploadAttachment).toHaveBeenCalledTimes(2);
+  expect(model.state.uploaded).toBe(true);
+  expect(model.state.error).toBe('');
+});
+
+test('uploads a retained original for a reused staged draft until completion is known', async () => {
+  const { model, api } = makeModel([image]);
+  api.stageImport.mockResolvedValue({ draftId: 'draft-reused', reused: true });
+  api.uploadAttachment
+    .mockRejectedValueOnce(new Error('reused upload failed'))
+    .mockResolvedValueOnce({ id: 'attachment-reused' });
+
+  await model.choosePhoto();
+  await expect(model.stage()).resolves.toBe(false);
+  await expect(model.stage()).resolves.toBe(true);
+
+  expect(api.stageImport).toHaveBeenCalledTimes(1);
+  expect(api.uploadAttachment).toHaveBeenCalledTimes(2);
+  expect(model.state.uploaded).toBe(true);
+});

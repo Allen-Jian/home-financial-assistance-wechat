@@ -323,7 +323,7 @@ test('direct bill flow rejects oversized and spoofed files before AI analysis', 
   expect(previewDocument).not.toHaveBeenCalled();
 });
 
-test('offline image selection preserves the file and draft without API calls, then retries online', async () => {
+test('offline new image selection clears the old draft without API calls, then retries online', async () => {
   const imageBytes = new Uint8Array([0xff, 0xd8, 0xff]);
   const chooseMedia = jest.fn(({ success }: { success: (result: { tempFiles: Array<{ tempFilePath: string; fileType: string }> }) => void }) => success({
     tempFiles: [{ tempFilePath: '/tmp/offline.jpg', fileType: 'image' }],
@@ -345,11 +345,17 @@ test('offline image selection preserves the file and draft without API calls, th
   await page.chooseAlbum.call(context);
 
   expect(model.state.file).toEqual(expect.objectContaining({ path: '/tmp/offline.jpg' }));
-  expect(model.state.draft).toEqual(expect.objectContaining({ merchant: 'Existing' }));
+  expect(model.state.draft).toBeNull();
+  expect(model.state.amount).toBe('');
+  expect(model.state.draftId).toBe('');
+  expect(model.state.uploaded).toBe(false);
+  expect(model.state.confirmed).toBe(false);
   expect(model.state.error).toContain('需要联网');
   expect(analyzePhoto).not.toHaveBeenCalled();
   expect(stageImport).not.toHaveBeenCalled();
   expect(uploadAttachment).not.toHaveBeenCalled();
+  await expect(model.confirm()).resolves.toBe(false);
+  expect(confirmDraft).not.toHaveBeenCalled();
 
   online = true;
   await page.retry.call(context);
@@ -357,6 +363,54 @@ test('offline image selection preserves the file and draft without API calls, th
   expect(analyzePhoto).toHaveBeenCalledTimes(1);
   expect(stageImport).toHaveBeenCalledTimes(1);
   expect(uploadAttachment).toHaveBeenCalledTimes(1);
+});
+
+test('a new file clears the old draft before a failed upload and cannot confirm unresolved original data', async () => {
+  const analyzePhoto = jest.fn().mockResolvedValue({ amountMinor: 1890, direction: 'expense', merchant: 'New' });
+  const stageImport = jest.fn().mockResolvedValue({ draftId: 'draft-new', reused: false });
+  const uploadAttachment = jest.fn().mockRejectedValue(new Error('upload failed'));
+  const confirmDraft = jest.fn();
+  const model = new PhotoEntryPageModel({ analyzePhoto, stageImport, uploadAttachment, confirmDraft });
+  model.state.file = { path: '/tmp/old.jpg', name: 'old.jpg', contentType: 'image/jpeg', bytes: new Uint8Array([0xff, 0xd8, 0xff]) };
+  model.state.draft = { amountMinor: 1250, direction: 'expense', merchant: 'Old' };
+  model.state.amount = '12.50';
+  model.state.draftId = 'draft-old';
+  model.state.uploaded = true;
+  model.state.confirmed = true;
+
+  await expect(model.analyze({ path: '/tmp/new.jpg', name: 'new.jpg', contentType: 'image/jpeg', bytes: new Uint8Array([0xff, 0xd8, 0xff]) })).resolves.toBe(false);
+
+  expect(model.state.draft).toEqual(expect.objectContaining({ merchant: 'New' }));
+  expect(model.state.draftId).toBe('draft-new');
+  expect(model.state.confirmed).toBe(false);
+  expect(model.state.uploaded).toBe(false);
+  expect(model.state.error).toContain('upload failed');
+  await expect(model.confirm()).resolves.toBe(false);
+  expect(confirmDraft).not.toHaveBeenCalled();
+});
+
+test('double-tap confirmation makes one API call and renders loading before it resolves', async () => {
+  let resolveCreate!: (value: { id: string }) => void;
+  const createTransaction = jest.fn(() => new Promise<{ id: string }>((resolve) => { resolveCreate = resolve; }));
+  const model = new PhotoEntryPageModel({ parseDraft: jest.fn().mockResolvedValue({ amountMinor: 1890, direction: 'expense' }), createTransaction });
+  await model.analyze({ path: '/tmp/receipt.jpg', name: 'receipt.jpg' });
+  const page = createPhotoEntryPage(model);
+  const setData = jest.fn();
+  const context = { setData };
+
+  const first = page.confirm.call(context);
+  expect(model.state.loading).toBe(true);
+  expect(setData).toHaveBeenCalledWith(expect.objectContaining({ loading: true }));
+  const second = page.confirm.call(context);
+  expect(createTransaction).toHaveBeenCalledTimes(1);
+  expect(model.state.loading).toBe(true);
+
+  resolveCreate({ id: 'tx-1' });
+  await expect(first).resolves.toBeUndefined();
+  await expect(second).resolves.toBeUndefined();
+  expect(model.state.confirmed).toBe(true);
+  await expect(model.confirm()).resolves.toBe(false);
+  expect(createTransaction).toHaveBeenCalledTimes(1);
 });
 
 test('retries a failed original upload before confirming a reused staged draft', async () => {

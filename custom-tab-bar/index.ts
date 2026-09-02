@@ -55,8 +55,18 @@ export function createCustomTabBar(theme?: ThemePageRuntime) {
         const index = readIndex(input);
         const slot = TAB_SLOTS[index];
         if (!slot?.pagePath || slot.action) return;
+        const previous = this.data.selected;
         this.setData({ selected: index });
-        wx.switchTab({ url: `/${slot.pagePath}` });
+        try {
+          wx.switchTab({
+            url: `/${slot.pagePath}`,
+            success: () => this.setData({ selected: index }),
+            fail: () => this.setData({ selected: previous }),
+          });
+        } catch (error) {
+          this.setData({ selected: previous });
+          throw error;
+        }
       },
       openEntry(this: TabBarContext) {
         if (this.data.openingEntry) return;
@@ -76,7 +86,7 @@ export function createCustomTabBar(theme?: ThemePageRuntime) {
 }
 
 declare const wx: {
-  switchTab(options: { url: string }): void;
+  switchTab(options: { url: string; success?: () => void; fail?: () => void }): void;
   navigateTo(options: { url: string; complete?: () => void }): void;
 };
 declare function Component(options: Record<string, unknown>): void;

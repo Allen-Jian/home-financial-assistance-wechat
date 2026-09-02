@@ -70,6 +70,7 @@ class ImportPageModel {
         };
         this.content = null;
         this.staged = new Map();
+        this.uploadCompleted = new Set();
     }
     setMode(mode) {
         this.state.mode = mode === 'statement' ? 'statement' : 'bill';
@@ -182,7 +183,7 @@ class ImportPageModel {
         }
     }
     async stage() {
-        var _a, _b, _c;
+        var _a;
         const file = this.state.file;
         if (!this.content || !this.state.sourceType)
             return this.reject('请先选择文件或输入账目描述');
@@ -193,6 +194,8 @@ class ImportPageModel {
             const previous = this.staged.get(fileHash);
             if (previous) {
                 this.state.stageResult = previous;
+                this.state.uploaded = this.uploadCompleted.has(fileHash);
+                await this.completeOriginalUpload(fileHash, previous);
                 return true;
             }
             const result = this.state.sourceType === 'anz-csv'
@@ -200,11 +203,7 @@ class ImportPageModel {
                 : await this.api.stageImport({ fileHash, sourceType: this.state.sourceType, draft: (_a = this.state.preview) !== null && _a !== void 0 ? _a : undefined });
             this.state.stageResult = result;
             this.staged.set(fileHash, result);
-            const draftId = (_c = (_b = result.draft) === null || _b === void 0 ? void 0 : _b.id) !== null && _c !== void 0 ? _c : result.draftId;
-            if (!result.reused && file && this.state.sourceType !== 'anz-csv' && draftId) {
-                await this.api.uploadAttachment({ filePath: file.path, draftId, originalName: file.name, contentType: file.contentType });
-                this.state.uploaded = true;
-            }
+            await this.completeOriginalUpload(fileHash, result);
             return true;
         }
         catch (error) {
@@ -215,6 +214,20 @@ class ImportPageModel {
         finally {
             this.state.loading = false;
         }
+    }
+    async completeOriginalUpload(fileHash, result) {
+        var _a, _b;
+        const file = this.state.file;
+        const draftId = (_b = (_a = result.draft) === null || _a === void 0 ? void 0 : _a.id) !== null && _b !== void 0 ? _b : result.draftId;
+        if (this.state.sourceType === 'anz-csv' || !file || !this.api.uploadAttachment || !draftId)
+            return;
+        if (this.uploadCompleted.has(fileHash)) {
+            this.state.uploaded = true;
+            return;
+        }
+        await this.api.uploadAttachment({ filePath: file.path, draftId, originalName: file.name, contentType: file.contentType });
+        this.uploadCompleted.add(fileHash);
+        this.state.uploaded = true;
     }
     async select(filePromise, sourceType) {
         var _a, _b, _c;

@@ -43,8 +43,19 @@ function createCustomTabBar(theme) {
                 const slot = exports.TAB_SLOTS[index];
                 if (!(slot === null || slot === void 0 ? void 0 : slot.pagePath) || slot.action)
                     return;
+                const previous = this.data.selected;
                 this.setData({ selected: index });
-                wx.switchTab({ url: `/${slot.pagePath}` });
+                try {
+                    wx.switchTab({
+                        url: `/${slot.pagePath}`,
+                        success: () => this.setData({ selected: index }),
+                        fail: () => this.setData({ selected: previous }),
+                    });
+                }
+                catch (error) {
+                    this.setData({ selected: previous });
+                    throw error;
+                }
             },
             openEntry() {
                 if (this.data.openingEntry)

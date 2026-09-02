@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import * as ts from 'typescript';
-import { withThemePage, type ThemePageRuntime } from '../src/shared/themed-page';
+import { withThemePage, type ThemePageContext, type ThemePageRuntime } from '../src/shared/themed-page';
 
 const snapshot = {
   preference: 'system' as const,
@@ -84,6 +84,21 @@ test('composes existing lifecycle methods and disposes its subscription once', (
   expect(onShow).toHaveBeenCalledTimes(1);
   expect(onUnload).toHaveBeenCalledTimes(2);
   expect(offTheme).toHaveBeenCalledTimes(1);
+});
+
+test('unsubscribes and rethrows when the original onLoad fails', () => {
+  const offTheme = jest.fn();
+  const theme: ThemePageRuntime = {
+    getSnapshot: () => snapshot,
+    subscribe: jest.fn(() => offTheme),
+  };
+  const failure = new Error('load failed');
+  const wrapped = withThemePage({ onLoad: jest.fn(() => { throw failure; }) }, theme);
+  const context = { setData: jest.fn() };
+
+  expect(() => (wrapped.onLoad as Function).call(context)).toThrow(failure);
+  expect(offTheme).toHaveBeenCalledTimes(1);
+  expect((context as ThemePageContext).__offTheme).toBeUndefined();
 });
 
 test('every configured page registers the themed wrapper in TS and generated JS', () => {

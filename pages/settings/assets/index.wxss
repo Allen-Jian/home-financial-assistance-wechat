@@ -11,4 +11,3 @@
 .success { margin-top: 20rpx; padding: 18rpx 22rpx; border-radius: 18rpx; background: var(--color-success-surface); color: var(--color-income); font-size: 25rpx; }
 .empty { padding: 90rpx 0; color: var(--color-muted); text-align: center; }
 .error { display: block; margin-top: 20rpx; color: var(--color-expense); font-size: 25rpx; }
-

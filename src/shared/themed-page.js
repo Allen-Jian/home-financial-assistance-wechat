@@ -9,8 +9,17 @@ function withThemePage(definition, theme) {
         ...definition,
         data: { ...source.data, ...theme.getSnapshot() },
         onLoad(...args) {
-            this.__offTheme = theme.subscribe((snapshot) => this.setData(snapshot));
-            return originalOnLoad === null || originalOnLoad === void 0 ? void 0 : originalOnLoad.apply(this, args);
+            let offTheme;
+            try {
+                offTheme = theme.subscribe((snapshot) => this.setData(snapshot));
+                this.__offTheme = offTheme;
+                return originalOnLoad === null || originalOnLoad === void 0 ? void 0 : originalOnLoad.apply(this, args);
+            }
+            catch (error) {
+                offTheme === null || offTheme === void 0 ? void 0 : offTheme();
+                this.__offTheme = undefined;
+                throw error;
+            }
         },
         onUnload(...args) {
             var _a;

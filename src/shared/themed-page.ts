@@ -23,8 +23,16 @@ export function withThemePage<T extends object>(
     ...definition,
     data: { ...source.data, ...theme.getSnapshot() },
     onLoad(this: ThemePageContext, ...args: unknown[]) {
-      this.__offTheme = theme.subscribe((snapshot) => this.setData(snapshot));
-      return originalOnLoad?.apply(this, args);
+      let offTheme: (() => void) | undefined;
+      try {
+        offTheme = theme.subscribe((snapshot) => this.setData(snapshot));
+        this.__offTheme = offTheme;
+        return originalOnLoad?.apply(this, args);
+      } catch (error) {
+        offTheme?.();
+        this.__offTheme = undefined;
+        throw error;
+      }
     },
     onUnload(this: ThemePageContext, ...args: unknown[]) {
       try {

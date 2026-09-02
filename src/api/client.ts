@@ -18,6 +18,7 @@ import type {
 import { SessionStore } from '../auth/session-store';
 import { ReadCache, type CachedRead } from '../cache/read-cache';
 import { isRecord } from '../shared/guards';
+import type { ConnectivityRuntime } from '../runtime/connectivity-runtime';
 
 export type RequestMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 export interface WxResponse {
@@ -82,6 +83,7 @@ export interface ApiClientOptions {
   transport?: WxRequestPort;
   cache?: ReadCache;
   requestTimeoutMs?: number;
+  connectivity?: Pick<ConnectivityRuntime, 'isOnline'>;
 }
 
 export interface ReadResult<T> extends CachedRead<T> {
@@ -143,6 +145,7 @@ export class ApiClient {
   }
 
   upload<T>(path: string, file: FileUpload): Promise<T> {
+    if (this.options.connectivity && !this.options.connectivity.isOnline()) return Promise.reject(this.offlineError());
     const session = this.options.sessions.read();
     const header: Record<string, string> = session ? { Authorization: `Bearer ${session.accessToken}` } : {};
     return new Promise<T>((resolve, reject) => {
@@ -258,6 +261,7 @@ export class ApiClient {
   }
 
   private rawRequest(method: RequestMethod, path: string, data: unknown): Promise<WxResponse> {
+    if (this.options.connectivity && !this.options.connectivity.isOnline()) return Promise.reject(this.offlineError());
     const session = this.options.sessions.read();
     const header: Record<string, string> = session ? { Authorization: `Bearer ${session.accessToken}` } : {};
     return new Promise<WxResponse>((resolve, reject) => {
@@ -307,6 +311,10 @@ export class ApiClient {
   private toApiError(statusCode: number, data: unknown): ApiError {
     const result = responseMessage(data, statusCode);
     return new ApiError(statusCode, errorCode(statusCode), result.message, result.details);
+  }
+
+  private offlineError(): ApiError {
+    return new ApiError(0, 'network', 'network unavailable until connectivity is confirmed');
   }
 
   private url(path: string, query?: Query): string {

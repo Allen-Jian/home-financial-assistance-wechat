@@ -5,6 +5,7 @@ import { ReadCache } from '../cache/read-cache';
 import { getAppConfig, type AppConfig, type ConfigEnv } from '../shared/config';
 import { runtimeConfig } from '../shared/runtime-config';
 import { ThemeRuntime } from '../shared/theme-runtime';
+import { ConnectivityRuntime } from './connectivity-runtime';
 
 export interface AppRuntime {
   config: AppConfig;
@@ -14,6 +15,7 @@ export interface AppRuntime {
   api: ApiClient;
   auth: WechatAuth;
   theme: ThemeRuntime;
+  connectivity: ConnectivityRuntime;
 }
 
 interface WxStorageRuntime extends StorageLike {}
@@ -31,8 +33,9 @@ export function createAppRuntime(storage: StorageLike, env: ConfigEnv = runtimeC
   const config = getAppConfig(env);
   const sessions = new SessionStore(storage);
   const cache = new ReadCache(storage);
-  const api = new ApiClient({ baseUrl: config.apiBaseUrl, sessions, cache });
+  const connectivity = new ConnectivityRuntime();
+  const api = new ApiClient({ baseUrl: config.apiBaseUrl, sessions, cache, connectivity });
   const auth = new WechatAuth(config, createWxLoginPort(), api);
   const theme = new ThemeRuntime(storage);
-  return { config, storage, sessions, cache, api, auth, theme };
+  return { config, storage, sessions, cache, api, auth, theme, connectivity };
 }

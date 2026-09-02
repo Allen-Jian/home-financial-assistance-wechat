@@ -141,6 +141,7 @@ export class ImportPageModel {
   };
   private content: FileContent | null = null;
   private readonly staged = new Map<string, StageResult>();
+  private readonly uploadCompleted = new Set<string>();
 
   constructor(
     private readonly picker: ImportPickerPort,
@@ -262,6 +263,8 @@ export class ImportPageModel {
       const previous = this.staged.get(fileHash);
       if (previous) {
         this.state.stageResult = previous;
+        this.state.uploaded = this.uploadCompleted.has(fileHash);
+        await this.completeOriginalUpload(fileHash, previous);
         return true;
       }
       const result = this.state.sourceType === 'anz-csv'
@@ -269,11 +272,7 @@ export class ImportPageModel {
         : await this.api.stageImport({ fileHash, sourceType: this.state.sourceType, draft: this.state.preview ?? undefined });
       this.state.stageResult = result;
       this.staged.set(fileHash, result);
-      const draftId = result.draft?.id ?? result.draftId;
-      if (!result.reused && file && this.state.sourceType !== 'anz-csv' && draftId) {
-        await this.api.uploadAttachment({ filePath: file.path, draftId, originalName: file.name, contentType: file.contentType });
-        this.state.uploaded = true;
-      }
+      await this.completeOriginalUpload(fileHash, result);
       return true;
     } catch (error) {
       this.state.originalPreserved = true;
@@ -282,6 +281,19 @@ export class ImportPageModel {
     } finally {
       this.state.loading = false;
     }
+  }
+
+  private async completeOriginalUpload(fileHash: string, result: StageResult): Promise<void> {
+    const file = this.state.file;
+    const draftId = result.draft?.id ?? result.draftId;
+    if (this.state.sourceType === 'anz-csv' || !file || !this.api.uploadAttachment || !draftId) return;
+    if (this.uploadCompleted.has(fileHash)) {
+      this.state.uploaded = true;
+      return;
+    }
+    await this.api.uploadAttachment({ filePath: file.path, draftId, originalName: file.name, contentType: file.contentType });
+    this.uploadCompleted.add(fileHash);
+    this.state.uploaded = true;
   }
 
   private async select(filePromise: Promise<PickedImportFile>, sourceType: ImportSourceType): Promise<boolean> {
