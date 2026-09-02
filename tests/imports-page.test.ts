@@ -656,3 +656,46 @@ test('a successful picker descriptor replaces the visible binding before its rea
   resolveRead(new Uint8Array([0xff, 0xd8, 0xff, 0xe1]));
   await expect(pending).resolves.toBe(true);
 });
+
+test('a completed keep-both resolution is terminal for later and repeated keep-both clicks', async () => {
+  const { model, api } = makeModel([csv]);
+  model.setMode('statement');
+  api.previewDuplicates.mockResolvedValue([{ incomingId: 'row-1', existingId: 'tx-1', score: 85, reasons: ['date-near'] }]);
+  await model.chooseCsv();
+  api.stageImport.mockResolvedValueOnce({ draftId: 'draft-terminal', reused: false });
+  api.confirmDraft.mockResolvedValueOnce({ id: 'tx-terminal' });
+
+  await expect(model.resolveDuplicate('row-1', 'keep-both')).resolves.toBe(true);
+  expect(model.state.duplicates).toEqual([expect.objectContaining({ sourceFingerprint: 'row-1', resolution: 'keep-both' })]);
+  expect(api.stageImport).toHaveBeenCalledTimes(1);
+  expect(api.confirmDraft).toHaveBeenCalledTimes(1);
+
+  await expect(model.resolveDuplicate('row-1', 'later')).resolves.toBe(false);
+  await expect(model.resolveDuplicate('row-1', 'keep-both')).resolves.toBe(false);
+  expect(model.state.duplicates).toEqual([expect.objectContaining({ sourceFingerprint: 'row-1', resolution: 'keep-both' })]);
+  expect(api.stageImport).toHaveBeenCalledTimes(1);
+  expect(api.confirmDraft).toHaveBeenCalledTimes(1);
+});
+
+test('picker page renders the accepted descriptor before deferred read and renders final state after completion', async () => {
+  const { model, picker, api } = makeModel([image]);
+  await model.choosePhoto();
+  await model.stage();
+  const newFile: PickedImportFile = { path: '/tmp/page-accepted-before-read.jpg', name: 'page-accepted-before-read.jpg', size: 1024, contentType: 'image/jpeg' };
+  let resolveRead!: (content: Uint8Array) => void;
+  picker.chooseAlbum.mockResolvedValueOnce(newFile);
+  picker.readFile.mockImplementationOnce(() => new Promise((resolve) => { resolveRead = resolve; }));
+  const snapshots: Array<{ file?: PickedImportFile | null; loading?: boolean; stageResult?: unknown; preview?: unknown }> = [];
+  const setData = jest.fn((data: unknown) => { snapshots.push(JSON.parse(JSON.stringify(data)) as typeof snapshots[number]); });
+  const page = createImportPage(model);
+
+  const pending = page.chooseAlbum.call({ setData });
+  await Promise.resolve();
+  expect(snapshots.some((snapshot) => snapshot.file?.path === newFile.path && snapshot.loading === true && snapshot.stageResult === null && snapshot.preview === null)).toBe(true);
+
+  await Promise.resolve();
+  resolveRead(new Uint8Array([0xff, 0xd8, 0xff, 0xe1]));
+  await pending;
+  expect(snapshots.at(-1)).toEqual(expect.objectContaining({ file: newFile, loading: false, stageResult: null }));
+  expect(api.previewDocument).toHaveBeenCalledTimes(2);
+});

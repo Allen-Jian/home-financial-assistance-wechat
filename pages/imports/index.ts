@@ -185,15 +185,15 @@ export class ImportPageModel {
     this.state.view = 'upload';
   }
 
-  choosePhoto(): Promise<boolean> {
-    return this.startPickerSelection('manual-photo', () => this.picker.chooseMedia());
+  choosePhoto(onAccepted?: () => void): Promise<boolean> {
+    return this.startPickerSelection('manual-photo', () => this.picker.chooseMedia(), onAccepted);
   }
 
-  chooseAlbum(): Promise<boolean> {
-    return this.startPickerSelection('manual-photo', () => this.picker.chooseAlbum());
+  chooseAlbum(onAccepted?: () => void): Promise<boolean> {
+    return this.startPickerSelection('manual-photo', () => this.picker.chooseAlbum(), onAccepted);
   }
 
-  async chooseFile(): Promise<boolean> {
+  async chooseFile(onAccepted?: () => void): Promise<boolean> {
     const attempt = this.beginPickerAttempt();
     try {
       const file = await this.picker.chooseMessageFile();
@@ -202,14 +202,15 @@ export class ImportPageModel {
       if (!type) return this.handlePickerFailure(new Error('文件类型不受支持'), attempt);
       const revision = this.beginSelection();
       this.activateFileDescriptor(file, type, revision);
+      onAccepted?.();
       return this.select(Promise.resolve(file), type, revision, true);
     } catch (error) {
       return this.handlePickerFailure(error, attempt);
     }
   }
 
-  chooseCsv(): Promise<boolean> {
-    return this.startPickerSelection('anz-csv', () => this.picker.chooseMessageFile());
+  chooseCsv(onAccepted?: () => void): Promise<boolean> {
+    return this.startPickerSelection('anz-csv', () => this.picker.chooseMessageFile(), onAccepted);
   }
 
   toggleMissing(sourceFingerprint: string): void {
@@ -266,11 +267,11 @@ export class ImportPageModel {
   async resolveDuplicate(sourceFingerprint: string, action: 'later' | 'keep-both'): Promise<boolean> {
     const row = this.state.duplicates.find((item) => item.sourceFingerprint === sourceFingerprint);
     if (!row) return false;
+    if (row.resolution === 'keep-both') return false;
     if (action === 'later') {
       row.resolution = 'later';
       return true;
     }
-    if (row.resolution === 'keep-both') return false;
     if (!this.content || !this.api.confirmDraft) return this.reject('补录接口暂不可用');
     const revision = this.selectionRevision;
     const key = `${revision}:${sourceFingerprint}`;
@@ -476,21 +477,22 @@ export class ImportPageModel {
     return this.pickerAttempt;
   }
 
-  private startPickerSelection(sourceType: ImportSourceType, pick: () => Promise<PickedImportFile>): Promise<boolean> {
+  private startPickerSelection(sourceType: ImportSourceType, pick: () => Promise<PickedImportFile>, onAccepted?: () => void): Promise<boolean> {
     const attempt = this.beginPickerAttempt();
     try {
-      return this.acceptPickerResult(pick(), sourceType, attempt);
+      return this.acceptPickerResult(pick(), sourceType, attempt, onAccepted);
     } catch (error) {
       return Promise.resolve(this.handlePickerFailure(error, attempt));
     }
   }
 
-  private async acceptPickerResult(filePromise: Promise<PickedImportFile>, sourceType: ImportSourceType, attempt: number): Promise<boolean> {
+  private async acceptPickerResult(filePromise: Promise<PickedImportFile>, sourceType: ImportSourceType, attempt: number, onAccepted?: () => void): Promise<boolean> {
     try {
       const file = await filePromise;
       if (!this.isCurrentPickerAttempt(attempt)) return false;
       const revision = this.beginSelection();
       this.activateFileDescriptor(file, sourceType, revision);
+      onAccepted?.();
       return this.select(Promise.resolve(file), sourceType, revision, true);
     } catch (error) {
       return this.handlePickerFailure(error, attempt);
@@ -574,10 +576,34 @@ export function createImportPage(model: ImportPageModel) {
   return {
     data: model.state,
     onLoad(this: PageContext, options: { mode?: string } = {}) { model.setMode(options.mode); this.setData(model.state); },
-    async choosePhoto(this: PageContext) { const pending = model.choosePhoto(); this.setData(model.state); await pending; this.setData(model.state); },
-    async chooseAlbum(this: PageContext) { const pending = model.chooseAlbum(); this.setData(model.state); await pending; this.setData(model.state); },
-    async chooseFile(this: PageContext) { const pending = model.chooseFile(); this.setData(model.state); await pending; this.setData(model.state); },
-    async chooseCsv(this: PageContext) { const pending = model.chooseCsv(); this.setData(model.state); await pending; this.setData(model.state); },
+    async choosePhoto(this: PageContext) {
+      const errorBefore = model.state.error;
+      let accepted = false;
+      const result = await model.choosePhoto(() => { accepted = true; this.setData(model.state); });
+      if (accepted || model.state.error !== errorBefore) this.setData(model.state);
+      return result;
+    },
+    async chooseAlbum(this: PageContext) {
+      const errorBefore = model.state.error;
+      let accepted = false;
+      const result = await model.chooseAlbum(() => { accepted = true; this.setData(model.state); });
+      if (accepted || model.state.error !== errorBefore) this.setData(model.state);
+      return result;
+    },
+    async chooseFile(this: PageContext) {
+      const errorBefore = model.state.error;
+      let accepted = false;
+      const result = await model.chooseFile(() => { accepted = true; this.setData(model.state); });
+      if (accepted || model.state.error !== errorBefore) this.setData(model.state);
+      return result;
+    },
+    async chooseCsv(this: PageContext) {
+      const errorBefore = model.state.error;
+      let accepted = false;
+      const result = await model.chooseCsv(() => { accepted = true; this.setData(model.state); });
+      if (accepted || model.state.error !== errorBefore) this.setData(model.state);
+      return result;
+    },
     async parseText(this: PageContext, event: { detail?: { value?: string } }) { await model.parseText(event.detail?.value ?? ''); this.setData(model.state); },
     async stage(this: PageContext) { await model.stage(); this.setData(model.state); },
     toggleMissing(this: PageContext, event: { currentTarget?: { dataset?: { id?: string } } }) { model.toggleMissing(event.currentTarget?.dataset?.id ?? ''); this.setData(model.state); },
