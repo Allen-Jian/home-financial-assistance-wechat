@@ -58,3 +58,18 @@
 - `npm run typecheck`：exit 0。
 - `git diff --check`：exit 0；`git diff --check fd2de0c..HEAD`：exit 0（均在最终文档提交后复核）。
 - Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-65ff5e8` 从代码/验收提交 `65ff5e8` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。其后仅追加本报告证据提交。
+
+## Round 3 imports final review fixes
+
+### RED / GREEN 证据
+
+- Selection revision：RED：`npm test -- --runInBand tests/imports-page.test.ts -t "stale image|stale CSV|stale parse"` 新增 3 项 deferred 测试后全部失败，旧 read/preview/parse 的 catch 或结果会改写新选择状态。GREEN：所有选择与 parse 在调用开始分配 revision；preview、CSV rows、statement classification 均先局部计算，success/catch/finally 只在 revision 仍当前时提交；当前 loading 不会被旧操作清除。
+- Same-hash stage reuse：RED：`npm test -- --runInBand tests/imports-page.test.ts -t "same hash|completed hash"` 的 2 项测试失败，旧 `revision:fileHash` key 导致重复 stage/upload。GREEN：stage in-flight、staged cache、upload completion 均按 fileHash 共享；跨 revision pending 与已完成重选均各只调用一次 stage/upload，当前 caller 单独提交可见 UI。
+- Duplicate keep-both：RED：`npm test -- --runInBand tests/imports-page.test.ts -t "duplicate keep-both"` 首次失败于页面未在 await 前渲染 loading。GREEN：按 revision/候选行的 in-flight guard、不可变 row/content snapshot、allowDuplicate confirm 和页面即时/最终 render 已覆盖；同一行双击只发一次，其他行可并行，失败后 guard 释放可重试。
+- Retry preservation：实现期间全量 imports 回归发现 stage 成功但 upload 失败时 `stageResult` 被清空；随后补上 StageOutcome 的 retained result，保持缓存 draft、错误和后续 upload retry 语义，原有 failure→cached retry 与 reused 测试继续通过。
+
+### Round 3 verification
+
+- Code/tests commit：`7cac7ec` (`fix: harden import selection and duplicate races`)。
+- Imports 聚焦：`npm test -- --runInBand tests/imports-page.test.ts`：1 suite、21 tests passed。
+- 全量 Jest、typecheck、微信构建及最终 clean-clone 证据将在本轮文档提交后记录；DevTools、真机、生产 API/VPS 仍保持 `未执行`。
