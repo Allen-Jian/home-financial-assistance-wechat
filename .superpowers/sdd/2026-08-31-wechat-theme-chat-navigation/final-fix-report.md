@@ -31,7 +31,7 @@
 - RED/GREEN：`withThemePage` onLoad throw 的 unsubscribe/rethrow、custom tab switch fail rollback 均新增测试并先红后绿。
 - 清除 Sunlit spec 的 trailing whitespace 和 assets WXSS 的空 EOF；新增根 `.gitattributes`：`*.js text eol=lf`。
 
-## Fresh verification
+## Previous-round verification
 
 - `npm test -- --runInBand`：29 suites、198 tests passed。
 - `npm run typecheck`：exit 0。
