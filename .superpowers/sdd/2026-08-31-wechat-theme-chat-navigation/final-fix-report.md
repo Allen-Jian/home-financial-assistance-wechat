@@ -156,3 +156,20 @@
 - `git diff --check fd2de0c..HEAD` 与 `git diff --check`：exit 0（最终文档提交后复核）。
 - Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-fc347ee` 从 `fc347ee` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
 - 生产/VPS、DevTools 当前重编译与真机截图仍未由本任务执行；没有 push/deploy。
+
+## DevTools remediation 2: AI composer clearance above raised action
+
+### RED / GREEN 证据
+
+- RED：新增闭合态 inset 回归后，旧实现仍只换算 112rpx custom tab bar；在 320/375/428px 宽度均未满足 raised 86rpx 中心动作及间距的 clearance，且既有生命周期/安全区期望失败。
+- GREEN：闭合态 clearance 现在显式由 112rpx tab bar + 43rpx（86rpx action 半径）+ 21rpx visual/shadow gap 组成，总计 176rpx，再按 `windowWidth / 750` 换算；safe-area 仍独立相加。键盘打开分支保持 `keyboardHeight + 8px`，`listBottomInsetPx` 继续由 composer bottom、composer height 和 list gap 推导。
+
+### Verification
+
+- Code/tests commit：`e5b1dd4` (`fix: clear AI composer above raised tab action`)。
+- 聚焦：`npm test -- --runInBand tests/ai-page.test.ts`：1 suite、29 tests passed；新增回归覆盖 320/375/428px、raised action top + gap、safe-area 和 keyboard-open formula。
+- 全量：`npm test -- --runInBand`：29 suites、224 tests passed。
+- `npm run typecheck`：exit 0；`npm run build:wechat`：exit 0。
+- `git diff --check` 与 `git diff --check fd2de0c..HEAD`：均 exit 0（最终文档提交后复核）。
+- Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-e5b1dd4` 从 `e5b1dd4` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
+- AI-03-AUTO 已更新为 224 tests 与 176rpx clearance 证据；实际 DevTools/真机截图仍由父任务复核，`AI-03-MANUAL`、`DEVTOOLS-01` 及相关手工行保持 `未执行`。没有 push/deploy。
