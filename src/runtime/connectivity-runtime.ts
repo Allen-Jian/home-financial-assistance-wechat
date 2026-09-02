@@ -17,6 +17,8 @@ export class ConnectivityRuntime {
   private readonly wx: ConnectivityWxPort | undefined;
   private readonly listener: ((result: { isConnected?: boolean; networkType?: string }) => void) | undefined;
   private disposed = false;
+  private eventSeen = false;
+  private generation = 0;
 
   constructor(runtime: ConnectivityWxPort | undefined = currentWx()) {
     this.wx = runtime;
@@ -24,15 +26,26 @@ export class ConnectivityRuntime {
       this.state = 'offline';
       return;
     }
-    this.listener = (result) => this.update(result);
+    this.listener = (result) => {
+      this.eventSeen = true;
+      this.generation += 1;
+      this.update(result);
+    };
     try { runtime.onNetworkStatusChange?.(this.listener); } catch { /* remain pessimistically offline */ }
     try {
+      const initialGeneration = this.generation;
       runtime.getNetworkType({
-        success: (result) => this.update(result),
-        fail: () => { this.state = 'offline'; },
+        success: (result) => {
+          if (this.disposed || this.eventSeen || this.generation !== initialGeneration) return;
+          this.update(result);
+        },
+        fail: () => {
+          if (this.disposed || this.eventSeen || this.generation !== initialGeneration) return;
+          this.state = 'offline';
+        },
       });
     } catch {
-      this.state = 'offline';
+      if (!this.disposed && !this.eventSeen) this.state = 'offline';
     }
   }
 
@@ -43,6 +56,7 @@ export class ConnectivityRuntime {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.generation += 1;
     if (this.listener) {
       try { this.wx?.offNetworkStatusChange?.(this.listener); } catch { /* cleanup is best effort */ }
     }

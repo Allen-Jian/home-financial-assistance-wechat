@@ -81,6 +81,7 @@ class AiPageModel {
             const conversations = await this.api.listAiConversations();
             if (!shouldApply())
                 return;
+            this.state.error = '';
             const latest = conversations[0];
             if (!latest)
                 return;
@@ -168,8 +169,11 @@ class AiPageModel {
     }
     setDraft(value) { this.state.draft = value; }
     async sendCurrent() {
-        const sent = await this.send(this.state.draft);
-        if (sent)
+        if (this.inFlightSend)
+            return false;
+        const submitted = this.state.draft;
+        const sent = await this.send(submitted);
+        if (sent && this.state.draft === submitted)
             this.state.draft = '';
         return sent;
     }

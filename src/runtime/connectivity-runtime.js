@@ -9,24 +9,40 @@ class ConnectivityRuntime {
         var _a;
         this.state = 'unknown';
         this.disposed = false;
+        this.eventSeen = false;
+        this.generation = 0;
         this.wx = runtime;
         if (!runtime) {
             this.state = 'offline';
             return;
         }
-        this.listener = (result) => this.update(result);
+        this.listener = (result) => {
+            this.eventSeen = true;
+            this.generation += 1;
+            this.update(result);
+        };
         try {
             (_a = runtime.onNetworkStatusChange) === null || _a === void 0 ? void 0 : _a.call(runtime, this.listener);
         }
         catch { /* remain pessimistically offline */ }
         try {
+            const initialGeneration = this.generation;
             runtime.getNetworkType({
-                success: (result) => this.update(result),
-                fail: () => { this.state = 'offline'; },
+                success: (result) => {
+                    if (this.disposed || this.eventSeen || this.generation !== initialGeneration)
+                        return;
+                    this.update(result);
+                },
+                fail: () => {
+                    if (this.disposed || this.eventSeen || this.generation !== initialGeneration)
+                        return;
+                    this.state = 'offline';
+                },
             });
         }
         catch {
-            this.state = 'offline';
+            if (!this.disposed && !this.eventSeen)
+                this.state = 'offline';
         }
     }
     getStatus() { return this.state; }
@@ -36,6 +52,7 @@ class ConnectivityRuntime {
         if (this.disposed)
             return;
         this.disposed = true;
+        this.generation += 1;
         if (this.listener) {
             try {
                 (_b = (_a = this.wx) === null || _a === void 0 ? void 0 : _a.offNetworkStatusChange) === null || _b === void 0 ? void 0 : _b.call(_a, this.listener);

@@ -112,6 +112,7 @@ export class AiPageModel {
     try {
       const conversations = await this.api.listAiConversations();
       if (!shouldApply()) return;
+      this.state.error = '';
       const latest = conversations[0] as (AiConversationSummary & { messages?: Array<{ role: 'user' | 'assistant'; contentJson?: unknown }> }) | undefined;
       if (!latest) return;
       const messages = Array.isArray(latest.messages) ? latest.messages.map((message) => {
@@ -181,8 +182,10 @@ export class AiPageModel {
   setDraft(value: string): void { this.state.draft = value; }
 
   async sendCurrent(): Promise<boolean> {
-    const sent = await this.send(this.state.draft);
-    if (sent) this.state.draft = '';
+    if (this.inFlightSend) return false;
+    const submitted = this.state.draft;
+    const sent = await this.send(submitted);
+    if (sent && this.state.draft === submitted) this.state.draft = '';
     return sent;
   }
 

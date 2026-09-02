@@ -566,3 +566,31 @@ test('concurrent sends are single-flight and append only one user/assistant pair
   expect(askAi).toHaveBeenCalledTimes(1);
   expect(model.state.messages.map((message) => message.content)).toEqual(['第一个问题', answer.answer]);
 });
+
+test('a second sendCurrent is a no-op and preserves a draft typed while the first is pending', async () => {
+  let resolveAnswer!: (value: typeof fullAnswer) => void;
+  const askAi = jest.fn(() => new Promise<typeof fullAnswer>((resolve) => { resolveAnswer = resolve; }));
+  const model = new AiPageModel({ askAi }, () => true, jest.fn(), new MemoryStorage());
+
+  model.setDraft('第一个问题');
+  const first = model.sendCurrent();
+  model.setDraft('第二个问题');
+  await expect(model.sendCurrent()).resolves.toBe(false);
+  expect(askAi).toHaveBeenCalledTimes(1);
+  expect(model.state.draft).toBe('第二个问题');
+
+  resolveAnswer(fullAnswer);
+  await expect(first).resolves.toBe(true);
+  expect(model.state.draft).toBe('第二个问题');
+  expect(model.state.messages.map((message) => message.content)).toEqual(['第一个问题', answer.answer]);
+});
+
+test('a successful current empty hydration clears an older error', async () => {
+  const model = new AiPageModel({ askAi: jest.fn(), listAiConversations: jest.fn().mockResolvedValue([]) }, () => true, jest.fn(), new MemoryStorage());
+  model.state.error = '旧错误';
+
+  await model.hydrate();
+
+  expect(model.state.error).toBe('');
+  expect(model.state.messages).toEqual([]);
+});
