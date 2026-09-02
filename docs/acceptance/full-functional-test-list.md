@@ -61,7 +61,7 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 
 ## 2026-08-31 主题、AI 聊天、图片来源与自定义导航
 
-本节只记录本轮新鲜证据。自动化、微信开发者工具、真机和生产 API 分开判定；本地测试通过不替代 DevTools、真机或生产验收。状态字段只使用 `未执行`、`通过`、`失败（附复现）`；生产 API 的授权门槛按要求写作 `未执行（待用户单独授权）`。
+本节只记录本轮新鲜证据。自动化、微信开发者工具、真机和生产 API 分开判定；本地测试通过不替代 DevTools、真机或生产验收。状态字段只使用 `未执行`、`通过`、`失败（附复现）`；生产授权说明放在证据/限制栏。
 
 ### 验收矩阵
 
@@ -79,18 +79,22 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 | UI-02 | 上下回弹 | 页面上下回弹背景与主题一致，不出现白边或遮挡 | 需要 DevTools/真机当前操作 | 未执行 |
 | NAV-01 | 五槽自定义导航 | 固定显示：首页、账目、记账、AI 聊天、设置 | Jest 静态/行为测试覆盖五槽和真实 tab 路径 | 通过 |
 | NAV-02 | 旧加号清理 | 首页不再显示旧 FAB/旧加号入口 | Jest 检查首页旧 FAB 标记与处理器已移除 | 通过 |
-| NAV-03 | 中心记账槽与返回 | 中心槽只打开记账页，二级页返回后恢复正确选中槽 | 自动化覆盖单次 `navigateTo` 和主 tab `onShow`；实际交互待工具/设备 | 通过 |
+| NAV-03-AUTO | 中心记账槽调用契约 | 中心槽只调用一次 `navigateTo('/pages/entry/index')`，主 tab `onShow` 恢复选中槽 | Jest 覆盖单次跳转与选中态契约 | 通过 |
+| NAV-03-MANUAL | 中心槽实际交互 | 快速连续点击、进入记账二级页并返回时导航不重复跳转且选中态正确 | 需要 DevTools/真机当前操作；本轮未执行 | 未执行 |
 | AI-01 | 短消息气泡 | 用户右对齐、AI 左对齐，短文本自然收缩 | Jest 覆盖 `.message-row`、`.message-bubble` 结构和宽度规则 | 通过 |
-| AI-02 | 长消息气泡 | 长文本换行，scope/insight/citation 保持在同一 AI 气泡内 | Jest 覆盖内容结构与最大宽度规则；视觉换行仍需工具/设备 | 通过 |
-| AI-03 | 键盘、输入法与多行 | 键盘出现/收起、输入法和多行输入时输入框可见并滚到最新消息 | Jest 覆盖键盘高度、inset、生命周期和 `chat-end` 锚点；实际输入法待工具/设备 | 通过 |
-| IMAGE-01 | 相机来源 | `chooseMedia` 使用 camera-only 并进入统一识别草稿链 | Jest 覆盖来源参数与统一分析路径；未打开真实相机 | 通过 |
-| IMAGE-02 | 相册来源 | `chooseMedia` 使用 album-only 并进入统一识别草稿链 | Jest 覆盖来源参数与统一分析路径；未打开真实相册 | 通过 |
-| IMAGE-03 | 微信聊天图片 | `chooseMessageFile({ type: 'image' })` 并进入统一识别草稿链 | Jest 覆盖调用参数；未打开真实微信文件选择器 | 通过 |
-| IMAGE-04 | 取消选择 | 三种来源取消均不 toast、不清状态、不分析 | Jest 覆盖 cancel 语义；真实权限/取消动作待工具/设备 | 通过 |
+| AI-02-AUTO | 长消息气泡结构契约 | 长文本允许换行，scope/insight/citation 保持在同一 AI 气泡内 | Jest 覆盖 WXML 结构、WXSS 最大宽度和换行规则 | 通过 |
+| AI-02-MANUAL | 长消息视觉换行 | 真正的长回答在微信渲染中换行且不挤压引用内容 | 需要 DevTools/真机当前视觉检查；本轮未执行 | 未执行 |
+| AI-03-AUTO | 键盘布局契约 | 键盘高度、inset、生命周期和 `chat-end` 锚点计算正确 | Jest 覆盖模型契约与回调注册/解绑 | 通过 |
+| AI-03-MANUAL | 键盘、输入法与多行 | 键盘出现/收起、输入法和多行输入时输入框可见并滚到最新消息 | 需要 DevTools/真机当前输入操作；本轮未执行 | 未执行 |
+| IMAGE-01-AUTO | 相机来源调用契约 | `chooseMedia` 使用 camera-only 并进入统一识别草稿链 | Jest mock 覆盖来源参数与统一分析路径；真实相机另行验收 | 通过 |
+| IMAGE-02-AUTO | 相册来源调用契约 | `chooseMedia` 使用 album-only 并进入统一识别草稿链 | Jest mock 覆盖来源参数与统一分析路径；真实相册另行验收 | 通过 |
+| IMAGE-03-AUTO | 微信聊天图片调用契约 | `chooseMessageFile({ type: 'image' })` 并进入统一识别草稿链 | Jest mock 覆盖调用参数；真实微信文件选择器另行验收 | 通过 |
+| IMAGE-04-AUTO | 取消逻辑契约 | 三种来源的 cancel 错误均不 toast、不清状态、不分析 | Jest mock 覆盖 cancel 语义与无副作用 | 通过 |
+| IMAGE-05-MANUAL | 图片来源与权限交互 | 真实相机、相册、微信聊天图片选择、权限拒绝和取消均表现正确 | 需要 DevTools/真机当前操作；本轮未执行 | 未执行 |
 | DEVTOOLS-01 | 微信开发者工具 | 三主题、原生栏/回弹、五槽、旧加号、气泡、键盘、多行、三图片来源均可操作 | 本轮没有新的当前 DevTools 会话或日志；历史记录不作为本轮证据 | 未执行 |
 | DEVICE-01 | 真机验收 | iOS/Android 完成主题、输入法、相机/相册/聊天图片、网络错误和安全区验收 | 本轮没有连接真机或采集设备证据 | 未执行 |
 | API-LOCAL-01 | 共享 API 本地 null scope 修复 | MiniMax 返回 null scope 时由服务端使用可信报告期间，输出 `scope.from/to` 字符串 | 只读检查 `D:\self\家庭手账APP\apps\api\src\ai\minimax.client.ts` 与 `ai-chat.service.ts`；AI 相关 2 suites/12 tests、完整 25 suites/110 tests、`npm run build` 均通过。API 工作树原有用户改动保持不动 | 通过 |
-| API-PROD-01 | 生产 `/v1/ai/chat` | 授权后重建并重启 api，再用空账本和有账目家庭验证 HTTP 200、字符串 scope、只读回答和授权引用 | 本轮未访问或重启 VPS；生产 502 仍在授权门槛，必须用户明确授权“仅重建并发布 VPS API 服务”后才能继续 | 未执行（待用户单独授权） |
+| API-PROD-01 | 生产 `/v1/ai/chat` | 授权后重建并重启 api，再用空账本和有账目家庭验证 HTTP 200、字符串 scope、只读回答和授权引用 | 本轮未访问或重启 VPS；生产 502 仍在授权门槛，必须用户明确授权“仅重建并发布 VPS API 服务”后才能继续 | 未执行 |
 
 ### 本轮命令与边界
 
