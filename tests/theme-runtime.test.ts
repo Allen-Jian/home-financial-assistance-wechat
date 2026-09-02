@@ -98,7 +98,7 @@ test('publishes one resolved theme to subscribers and native color interfaces', 
   expect(listener).toHaveBeenLastCalledWith(result.snapshot);
   expect(result.snapshot.tokens).toEqual(DARK_TOKENS);
   expect(nav).toHaveBeenLastCalledWith({
-    frontColor: '#FFFFFF',
+    frontColor: '#ffffff',
     backgroundColor: DARK_TOKENS.background,
   });
   expect(background).toHaveBeenLastCalledWith({
@@ -107,6 +107,25 @@ test('publishes one resolved theme to subscribers and native color interfaces', 
     backgroundColorBottom: DARK_TOKENS.background,
   });
   expect(result.snapshot.tokens).not.toBe(LIGHT_TOKENS);
+});
+
+test('uses exact lowercase allowed front colors for light and dark native headers', () => {
+  const storage = new MemoryStorage();
+  const system = nativeTheme();
+  const runtime = new ThemeRuntime(storage, system.native);
+  const nav = system.native.setNavigationBarColor as jest.Mock;
+
+  runtime.setPreference('light');
+  expect(nav).toHaveBeenLastCalledWith({
+    frontColor: '#000000',
+    backgroundColor: LIGHT_TOKENS.background,
+  });
+
+  runtime.setPreference('dark');
+  expect(nav).toHaveBeenLastCalledWith({
+    frontColor: '#ffffff',
+    backgroundColor: DARK_TOKENS.background,
+  });
 });
 
 test('does not block page updates when native color interfaces fail', () => {

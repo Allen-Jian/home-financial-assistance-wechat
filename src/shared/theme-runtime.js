@@ -109,7 +109,7 @@ class ThemeRuntime {
         };
         try {
             (_b = (_a = this.native).setNavigationBarColor) === null || _b === void 0 ? void 0 : _b.call(_a, {
-                frontColor: resolvedTheme === 'dark' ? '#FFFFFF' : '#000000',
+                frontColor: resolvedTheme === 'dark' ? '#ffffff' : '#000000',
                 backgroundColor: tokens.background,
             });
         }

@@ -152,7 +152,7 @@ export class ThemeRuntime {
 
     try {
       this.native.setNavigationBarColor?.({
-        frontColor: resolvedTheme === 'dark' ? '#FFFFFF' : '#000000',
+        frontColor: resolvedTheme === 'dark' ? '#ffffff' : '#000000',
         backgroundColor: tokens.background,
       });
     } catch {
