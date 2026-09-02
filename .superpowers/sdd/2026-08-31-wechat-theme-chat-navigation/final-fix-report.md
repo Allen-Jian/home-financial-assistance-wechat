@@ -72,4 +72,8 @@
 
 - Code/tests commit：`7cac7ec` (`fix: harden import selection and duplicate races`)。
 - Imports 聚焦：`npm test -- --runInBand tests/imports-page.test.ts`：1 suite、21 tests passed。
-- 全量 Jest、typecheck、微信构建及最终 clean-clone 证据将在本轮文档提交后记录；DevTools、真机、生产 API/VPS 仍保持 `未执行`。
+- 全量：`npm test -- --runInBand`：29 suites、212 tests passed。
+- `npm run typecheck`：exit 0；`npm run build:wechat`：exit 0。
+- `git diff --check`：exit 0；`git diff --check fd2de0c..HEAD`：exit 0（最终文档提交后复核）。
+- Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-7290665` 从提交 `7290665` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
+- DevTools、真机、生产 API/VPS 仍保持 `未执行`；没有 push/deploy。
