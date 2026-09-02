@@ -59,6 +59,12 @@ function simpleHash(content) {
         hash = Math.imul(hash ^ byte, 16777619);
     return (hash >>> 0).toString(16).padStart(8, '0');
 }
+function isPickerCancellation(error) {
+    if (!error || typeof error !== 'object')
+        return typeof error === 'string' && /cancel|取消/i.test(error);
+    const candidate = error;
+    return [candidate.errMsg, candidate.message].some((value) => typeof value === 'string' && /cancel|取消/i.test(value));
+}
 class ImportPageModel {
     constructor(picker, api, hashFile = simpleHash) {
         this.picker = picker;
@@ -73,6 +79,7 @@ class ImportPageModel {
         this.uploadCompleted = new Set();
         this.stageInFlight = new Map();
         this.selectionRevision = 0;
+        this.pickerAttempt = 0;
         this.confirmMissingInFlight = null;
         this.duplicateInFlight = new Map();
     }
@@ -81,29 +88,29 @@ class ImportPageModel {
         this.state.view = 'upload';
     }
     choosePhoto() {
-        const revision = this.beginSelection();
-        return this.select(this.picker.chooseMedia(), 'manual-photo', revision);
+        return this.startPickerSelection('manual-photo', () => this.picker.chooseMedia());
     }
     chooseAlbum() {
-        const revision = this.beginSelection();
-        return this.select(this.picker.chooseAlbum(), 'manual-photo', revision);
+        return this.startPickerSelection('manual-photo', () => this.picker.chooseAlbum());
     }
     async chooseFile() {
-        const revision = this.beginSelection();
+        const attempt = this.beginPickerAttempt();
         try {
             const file = await this.picker.chooseMessageFile();
-            if (!this.isCurrent(revision))
+            if (!this.isCurrentPickerAttempt(attempt))
                 return false;
             const type = file.contentType === 'application/pdf' ? 'pdf' : file.contentType === 'text/csv' ? 'anz-csv' : file.contentType.startsWith('image/') ? 'manual-photo' : null;
-            return type ? this.select(Promise.resolve(file), type, revision) : this.reject('文件类型不受支持', revision);
+            if (!type)
+                return this.handlePickerFailure(new Error('文件类型不受支持'), attempt);
+            const revision = this.beginSelection();
+            return this.select(Promise.resolve(file), type, revision);
         }
         catch (error) {
-            return this.isCurrent(revision) ? this.reject(error instanceof Error ? error.message : '文件选择失败', revision) : false;
+            return this.handlePickerFailure(error, attempt);
         }
     }
     chooseCsv() {
-        const revision = this.beginSelection();
-        return this.select(this.picker.chooseMessageFile(), 'anz-csv', revision);
+        return this.startPickerSelection('anz-csv', () => this.picker.chooseMessageFile());
     }
     toggleMissing(sourceFingerprint) {
         this.state.missing = this.state.missing.map((row) => row.sourceFingerprint === sourceFingerprint ? { ...row, selected: !row.selected } : row);
@@ -173,6 +180,8 @@ class ImportPageModel {
             row.resolution = 'later';
             return true;
         }
+        if (row.resolution === 'keep-both')
+            return false;
         if (!this.content || !this.api.confirmDraft)
             return this.reject('补录接口暂不可用');
         const revision = this.selectionRevision;
@@ -406,6 +415,37 @@ class ImportPageModel {
         this.state.error = '';
         return this.selectionRevision;
     }
+    beginPickerAttempt() {
+        this.pickerAttempt += 1;
+        return this.pickerAttempt;
+    }
+    startPickerSelection(sourceType, pick) {
+        const attempt = this.beginPickerAttempt();
+        try {
+            return this.acceptPickerResult(pick(), sourceType, attempt);
+        }
+        catch (error) {
+            return Promise.resolve(this.handlePickerFailure(error, attempt));
+        }
+    }
+    async acceptPickerResult(filePromise, sourceType, attempt) {
+        try {
+            const file = await filePromise;
+            if (!this.isCurrentPickerAttempt(attempt))
+                return false;
+            const revision = this.beginSelection();
+            return this.select(Promise.resolve(file), sourceType, revision);
+        }
+        catch (error) {
+            return this.handlePickerFailure(error, attempt);
+        }
+    }
+    handlePickerFailure(error, attempt) {
+        if (!this.isCurrentPickerAttempt(attempt) || isPickerCancellation(error))
+            return false;
+        this.state.error = error instanceof Error ? error.message : '文件选择失败';
+        return false;
+    }
     activateFileDescriptor(file, sourceType, revision) {
         if (!this.isCurrent(revision))
             return;
@@ -426,6 +466,7 @@ class ImportPageModel {
         this.state.confirmedMissingCount = 0;
     }
     isCurrent(revision) { return revision === this.selectionRevision; }
+    isCurrentPickerAttempt(attempt) { return attempt === this.pickerAttempt; }
     hasDuplicateFlightForRevision(revision) {
         const prefix = `${revision}:`;
         return [...this.duplicateInFlight.keys()].some((key) => key.startsWith(prefix));

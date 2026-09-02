@@ -154,6 +154,12 @@ function simpleHash(content: FileContent): string {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
+function isPickerCancellation(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return typeof error === 'string' && /cancel|取消/i.test(error);
+  const candidate = error as { errMsg?: unknown; message?: unknown };
+  return [candidate.errMsg, candidate.message].some((value) => typeof value === 'string' && /cancel|取消/i.test(value));
+}
+
 export class ImportPageModel {
   state: ImportPageState = {
     mode: 'bill', view: 'upload', file: null, sourceType: null, preview: null, previewAmountDisplay: '', rows: [], stageResult: null, uploaded: false,
@@ -164,6 +170,7 @@ export class ImportPageModel {
   private readonly uploadCompleted = new Set<string>();
   private readonly stageInFlight = new Map<string, Promise<StageOutcome>>();
   private selectionRevision = 0;
+  private pickerAttempt = 0;
   private confirmMissingInFlight: Promise<boolean> | null = null;
   private readonly duplicateInFlight = new Map<string, Promise<boolean>>();
 
@@ -179,30 +186,29 @@ export class ImportPageModel {
   }
 
   choosePhoto(): Promise<boolean> {
-    const revision = this.beginSelection();
-    return this.select(this.picker.chooseMedia(), 'manual-photo', revision);
+    return this.startPickerSelection('manual-photo', () => this.picker.chooseMedia());
   }
 
   chooseAlbum(): Promise<boolean> {
-    const revision = this.beginSelection();
-    return this.select(this.picker.chooseAlbum(), 'manual-photo', revision);
+    return this.startPickerSelection('manual-photo', () => this.picker.chooseAlbum());
   }
 
   async chooseFile(): Promise<boolean> {
-    const revision = this.beginSelection();
+    const attempt = this.beginPickerAttempt();
     try {
       const file = await this.picker.chooseMessageFile();
-      if (!this.isCurrent(revision)) return false;
+      if (!this.isCurrentPickerAttempt(attempt)) return false;
       const type: ImportSourceType | null = file.contentType === 'application/pdf' ? 'pdf' : file.contentType === 'text/csv' ? 'anz-csv' : file.contentType.startsWith('image/') ? 'manual-photo' : null;
-      return type ? this.select(Promise.resolve(file), type, revision) : this.reject('文件类型不受支持', revision);
+      if (!type) return this.handlePickerFailure(new Error('文件类型不受支持'), attempt);
+      const revision = this.beginSelection();
+      return this.select(Promise.resolve(file), type, revision);
     } catch (error) {
-      return this.isCurrent(revision) ? this.reject(error instanceof Error ? error.message : '文件选择失败', revision) : false;
+      return this.handlePickerFailure(error, attempt);
     }
   }
 
   chooseCsv(): Promise<boolean> {
-    const revision = this.beginSelection();
-    return this.select(this.picker.chooseMessageFile(), 'anz-csv', revision);
+    return this.startPickerSelection('anz-csv', () => this.picker.chooseMessageFile());
   }
 
   toggleMissing(sourceFingerprint: string): void {
@@ -263,6 +269,7 @@ export class ImportPageModel {
       row.resolution = 'later';
       return true;
     }
+    if (row.resolution === 'keep-both') return false;
     if (!this.content || !this.api.confirmDraft) return this.reject('补录接口暂不可用');
     const revision = this.selectionRevision;
     const key = `${revision}:${sourceFingerprint}`;
@@ -463,6 +470,37 @@ export class ImportPageModel {
     return this.selectionRevision;
   }
 
+  private beginPickerAttempt(): number {
+    this.pickerAttempt += 1;
+    return this.pickerAttempt;
+  }
+
+  private startPickerSelection(sourceType: ImportSourceType, pick: () => Promise<PickedImportFile>): Promise<boolean> {
+    const attempt = this.beginPickerAttempt();
+    try {
+      return this.acceptPickerResult(pick(), sourceType, attempt);
+    } catch (error) {
+      return Promise.resolve(this.handlePickerFailure(error, attempt));
+    }
+  }
+
+  private async acceptPickerResult(filePromise: Promise<PickedImportFile>, sourceType: ImportSourceType, attempt: number): Promise<boolean> {
+    try {
+      const file = await filePromise;
+      if (!this.isCurrentPickerAttempt(attempt)) return false;
+      const revision = this.beginSelection();
+      return this.select(Promise.resolve(file), sourceType, revision);
+    } catch (error) {
+      return this.handlePickerFailure(error, attempt);
+    }
+  }
+
+  private handlePickerFailure(error: unknown, attempt: number): false {
+    if (!this.isCurrentPickerAttempt(attempt) || isPickerCancellation(error)) return false;
+    this.state.error = error instanceof Error ? error.message : '文件选择失败';
+    return false;
+  }
+
   private activateFileDescriptor(file: PickedImportFile, sourceType: ImportSourceType, revision: number): void {
     if (!this.isCurrent(revision)) return;
     this.content = null;
@@ -483,6 +521,8 @@ export class ImportPageModel {
   }
 
   private isCurrent(revision: number): boolean { return revision === this.selectionRevision; }
+
+  private isCurrentPickerAttempt(attempt: number): boolean { return attempt === this.pickerAttempt; }
 
   private hasDuplicateFlightForRevision(revision: number): boolean {
     const prefix = `${revision}:`;

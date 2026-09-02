@@ -38,6 +38,7 @@ test('statement mode shows analysis then groups matched, duplicate, and missing 
     .mockResolvedValueOnce([]);
 
   const pending = model.chooseCsv();
+  await Promise.resolve();
   expect(model.state.view).toBe('analyzing');
   await expect(pending).resolves.toBe(true);
 
@@ -482,6 +483,7 @@ test('a new statement selection clears the prior confirmed missing count', async
 
   const pending = model.chooseCsv();
   await Promise.resolve();
+  await Promise.resolve();
   expect(model.state.confirmedMissingCount).toBe(0);
   await expect(pending).resolves.toBe(true);
   expect(model.state.confirmedMissingCount).toBe(0);
@@ -547,4 +549,90 @@ test('a new descriptor replaces old binding before read and remains retryable af
   expect(api.stageImport).toHaveBeenCalledTimes(2);
   expect(api.uploadAttachment).toHaveBeenLastCalledWith(expect.objectContaining({ filePath: newFile.path, draftId: 'draft-new-bound' }));
   expect(model.state.uploaded).toBe(true);
+});
+
+test('a cancelled statement picker preserves the accepted selection state and revision', async () => {
+  const { model, picker, api } = makeModel([csv]);
+  model.setMode('statement');
+  api.previewDuplicates.mockResolvedValue([]);
+  await model.chooseCsv();
+  await model.stage();
+  model.state.confirmedMissingCount = 2;
+  const stateBefore = JSON.parse(JSON.stringify(model.state));
+  const revisionBefore = (model as unknown as { selectionRevision: number }).selectionRevision;
+  let cancelPicker!: (error: unknown) => void;
+  picker.chooseMessageFile.mockImplementationOnce(() => new Promise((_, reject) => { cancelPicker = reject; }));
+
+  const pending = model.chooseCsv();
+  expect(model.state).toEqual(stateBefore);
+  expect((model as unknown as { selectionRevision: number }).selectionRevision).toBe(revisionBefore);
+  cancelPicker({ errMsg: 'chooseMessageFile:fail cancel' });
+
+  await expect(pending).resolves.toBe(false);
+  expect(model.state).toEqual(stateBefore);
+  expect((model as unknown as { selectionRevision: number }).selectionRevision).toBe(revisionBefore);
+});
+
+test('a cancelled picker does not disturb pending keep-both and does not allow a completed retry', async () => {
+  const { model, picker, api } = makeModel([csv]);
+  model.setMode('statement');
+  api.previewDuplicates.mockResolvedValue([{ incomingId: 'row-1', existingId: 'tx-1', score: 85, reasons: ['date-near'] }]);
+  await model.chooseCsv();
+  let resolveStage!: (result: { draftId: string; reused: boolean }) => void;
+  api.stageImport.mockImplementationOnce(() => new Promise((resolve) => { resolveStage = resolve; }));
+  let resolveConfirm!: (result: { id: string }) => void;
+  api.confirmDraft.mockImplementationOnce(() => new Promise((resolve) => { resolveConfirm = resolve; }));
+
+  const keepBoth = model.resolveDuplicate('row-1', 'keep-both');
+  await Promise.resolve();
+  expect(api.stageImport).toHaveBeenCalledTimes(1);
+  const revisionBefore = (model as unknown as { selectionRevision: number }).selectionRevision;
+  const errorBefore = model.state.error;
+  let cancelPicker!: (error: unknown) => void;
+  picker.chooseAlbum.mockImplementationOnce(() => new Promise((_, reject) => { cancelPicker = reject; }));
+
+  const cancelled = model.chooseAlbum();
+  expect((model as unknown as { selectionRevision: number }).selectionRevision).toBe(revisionBefore);
+  cancelPicker({ errMsg: 'chooseMedia:fail cancel' });
+  await expect(cancelled).resolves.toBe(false);
+  expect(model.state.error).toBe(errorBefore);
+  expect(model.state.loading).toBe(true);
+
+  resolveStage({ draftId: 'draft-keep-both', reused: false });
+  await Promise.resolve();
+  expect(api.confirmDraft).toHaveBeenCalledTimes(1);
+  resolveConfirm({ id: 'tx-keep-both' });
+  await expect(keepBoth).resolves.toBe(true);
+  expect(model.state.loading).toBe(false);
+  expect(model.state.duplicates).toEqual([expect.objectContaining({ sourceFingerprint: 'row-1', resolution: 'keep-both' })]);
+
+  await expect(model.resolveDuplicate('row-1', 'keep-both')).resolves.toBe(false);
+  expect(api.stageImport).toHaveBeenCalledTimes(1);
+  expect(api.confirmDraft).toHaveBeenCalledTimes(1);
+});
+
+test('only the latest overlapping picker attempt can accept a new selection', async () => {
+  const { model, picker } = makeModel([image]);
+  await model.choosePhoto();
+  const stateBefore = JSON.parse(JSON.stringify(model.state));
+  const revisionBefore = (model as unknown as { selectionRevision: number }).selectionRevision;
+  let resolveOld!: (file: PickedImportFile) => void;
+  let rejectLatest!: (error: unknown) => void;
+  picker.chooseMessageFile
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }))
+    .mockImplementationOnce(() => new Promise((_, reject) => { rejectLatest = reject; }));
+
+  const oldAttempt = model.chooseCsv();
+  const latestAttempt = model.chooseCsv();
+  expect((model as unknown as { selectionRevision: number }).selectionRevision).toBe(revisionBefore);
+  rejectLatest({ errMsg: 'chooseMessageFile:fail cancel' });
+  await expect(latestAttempt).resolves.toBe(false);
+  resolveOld(csv);
+  await expect(oldAttempt).resolves.toBe(false);
+  expect(model.state.file).toEqual(image);
+  expect(model.state.sourceType).toBe('manual-photo');
+  expect(model.state.view).toBe('preview');
+  expect(model.state.loading).toBe(false);
+  expect(model.state.error).toBe('');
+  expect((model as unknown as { selectionRevision: number }).selectionRevision).toBe(revisionBefore);
 });
