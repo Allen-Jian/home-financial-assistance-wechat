@@ -57,6 +57,12 @@ function imageContentTypeForBytes(bytes: Uint8Array): 'image/jpeg' | 'image/png'
   return undefined;
 }
 
+function normalizeImageFile(file: PhotoEntryFile, bytes: Uint8Array): PhotoEntryFile {
+  const contentType = imageContentTypeForBytes(bytes);
+  if (!contentType) throw new Error('文件类型与内容签名不匹配');
+  return { ...file, bytes, contentType };
+}
+
 export function isPickerCancel(error: unknown): boolean {
   const messages: unknown[] = [];
   if (typeof error === 'string') messages.push(error);
@@ -236,7 +242,10 @@ export class PhotoEntryPageModel {
     if (!this.state.file.bytes && this.readFile) {
       try {
         const bytes = await this.readFile(this.state.file.path);
-        return this.analyze({ ...this.state.file, bytes });
+        const selected = this.state.file.contentType?.startsWith('image/') === false
+          ? { ...this.state.file, bytes }
+          : normalizeImageFile(this.state.file, bytes);
+        return this.analyze(selected);
       } catch (error) {
         this.preserveFileError(this.state.file, error);
         return false;
@@ -324,8 +333,8 @@ function readFileBytes(path: string): Promise<Uint8Array> {
   }));
 }
 
-function createOnlineStatus(): () => boolean {
-  let online = true;
+export function createOnlineStatus(): () => boolean {
+  let online = false;
   if (typeof wx === 'undefined' || !wx.getNetworkType) return () => online;
   wx.getNetworkType({ success: (result) => { online = result.networkType !== 'none'; }, fail: () => { online = false; } });
   wx.onNetworkStatusChange?.((result) => { online = result.isConnected !== false && result.networkType !== 'none'; });
@@ -367,11 +376,7 @@ export function chooseImage(source: ImageSource): Promise<PhotoEntryFile> {
         return;
       }
       try {
-        selected.bytes = await readFileBytes(selected.path);
-        const contentType = imageContentTypeForBytes(selected.bytes);
-        if (!contentType) throw new Error('文件类型与内容签名不匹配');
-        selected.contentType = contentType;
-        resolve(selected);
+        resolve(normalizeImageFile(selected, await readFileBytes(selected.path)));
       } catch (error) {
         reject(new SelectedFileError(selected, error));
       }

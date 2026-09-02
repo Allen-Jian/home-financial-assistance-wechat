@@ -1,4 +1,4 @@
-import { createPhotoEntryPage, isPickerCancel, PhotoEntryPageModel } from '../pages/entry/photo/index';
+import { createPhotoEntryPage, createOnlineStatus, isPickerCancel, PhotoEntryPageModel } from '../pages/entry/photo/index';
 
 test('quick photo entry requests camera-only media', () => {
   const chooseMedia = jest.fn(({ success }: { sourceType: string[]; success: (result: { tempFiles: never[] }) => void }) => success({ tempFiles: [] }));
@@ -461,4 +461,73 @@ test('rejects an opaque image whose bytes have no supported signature', async ()
   expect(model.state.error).toContain('文件类型');
   expect(model.state.file).toEqual(expect.objectContaining({ path: 'wxfile://opaque' }));
   expect(analyzePhoto).not.toHaveBeenCalled();
+});
+
+test('runtime network status stays blocked until async Wi-Fi confirmation, then retry analyzes once', async () => {
+  let networkOptions!: { success: (result: { networkType?: string }) => void; fail?: () => void };
+  const getNetworkType = jest.fn((options: typeof networkOptions) => { networkOptions = options; });
+  const chooseMedia = jest.fn(({ success }: { success: (result: { tempFiles: Array<{ tempFilePath: string; fileType: string }> }) => void }) => success({
+    tempFiles: [{ tempFilePath: '/tmp/pending-network.jpg', fileType: 'image' }],
+  }));
+  const analyzePhoto = jest.fn().mockResolvedValue({ amountMinor: 1890, direction: 'expense' });
+  const stageImport = jest.fn().mockResolvedValue({ draftId: 'draft-network', reused: false });
+  const uploadAttachment = jest.fn().mockResolvedValue({ id: 'attachment-network' });
+  (globalThis as { wx?: unknown }).wx = {
+    getNetworkType,
+    chooseMedia,
+    getFileSystemManager: () => ({ readFile: ({ success }: { success: (result: { data: ArrayBuffer }) => void }) => success({ data: new Uint8Array([0xff, 0xd8, 0xff]).buffer }) }),
+  };
+  const isOnline = createOnlineStatus();
+  const model = new PhotoEntryPageModel({ analyzePhoto, stageImport, uploadAttachment, confirmDraft: jest.fn() }, isOnline);
+  const page = createPhotoEntryPage(model);
+  const context = { setData: jest.fn() };
+
+  expect(isOnline()).toBe(false);
+  await page.chooseAlbum.call(context);
+  expect(analyzePhoto).not.toHaveBeenCalled();
+  expect(stageImport).not.toHaveBeenCalled();
+  expect(uploadAttachment).not.toHaveBeenCalled();
+  expect(model.state.file).toEqual(expect.objectContaining({ path: '/tmp/pending-network.jpg' }));
+
+  networkOptions.success({ networkType: 'wifi' });
+  await page.retry.call(context);
+  expect(analyzePhoto).toHaveBeenCalledTimes(1);
+  expect(stageImport).toHaveBeenCalledTimes(1);
+  expect(uploadAttachment).toHaveBeenCalledTimes(1);
+});
+
+test('network query failure remains safely blocked', () => {
+  let networkOptions!: { success: (result: { networkType?: string }) => void; fail?: () => void };
+  (globalThis as { wx?: unknown }).wx = {
+    getNetworkType: (options: typeof networkOptions) => { networkOptions = options; },
+  };
+  const isOnline = createOnlineStatus();
+
+  expect(isOnline()).toBe(false);
+  networkOptions.fail?.();
+  expect(isOnline()).toBe(false);
+});
+
+test('retry rereads and re-detects MIME for an opaque PNG after the first read fails', async () => {
+  const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const chooseMedia = jest.fn(({ success }: { success: (result: { tempFiles: Array<{ tempFilePath: string; fileType: string }> }) => void }) => success({
+    tempFiles: [{ tempFilePath: 'wxfile://opaque-png', fileType: 'image' }],
+  }));
+  const analyzePhoto = jest.fn().mockResolvedValue({ amountMinor: 1890, direction: 'expense' });
+  const readFile = jest.fn().mockResolvedValue(pngBytes);
+  (globalThis as { wx?: unknown }).wx = {
+    chooseMedia,
+    getFileSystemManager: () => ({ readFile: ({ fail }: { fail: (error: Error) => void }) => fail(new Error('first read failed')) }),
+  };
+  const model = new PhotoEntryPageModel({ analyzePhoto }, () => true, readFile);
+  const page = createPhotoEntryPage(model);
+  const context = { setData: jest.fn() };
+
+  await page.chooseAlbum.call(context);
+  expect(model.state.error).toContain('first read failed');
+  await page.retry.call(context);
+
+  expect(readFile).toHaveBeenCalledWith('wxfile://opaque-png');
+  expect(model.state.file?.contentType).toBe('image/png');
+  expect(analyzePhoto).toHaveBeenCalledWith(expect.objectContaining({ contentType: 'image/png' }));
 });

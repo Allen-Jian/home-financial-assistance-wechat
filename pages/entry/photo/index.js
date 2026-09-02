@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PhotoEntryPageModel = void 0;
 exports.isPickerCancel = isPickerCancel;
+exports.createOnlineStatus = createOnlineStatus;
 exports.chooseImage = chooseImage;
 exports.createPhotoEntryPage = createPhotoEntryPage;
 const client_1 = require("../../../src/api/client");
@@ -20,6 +21,12 @@ function imageContentTypeForBytes(bytes) {
     if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
         return 'image/jpeg';
     return undefined;
+}
+function normalizeImageFile(file, bytes) {
+    const contentType = imageContentTypeForBytes(bytes);
+    if (!contentType)
+        throw new Error('文件类型与内容签名不匹配');
+    return { ...file, bytes, contentType };
 }
 function isPickerCancel(error) {
     const messages = [];
@@ -208,6 +215,7 @@ class PhotoEntryPageModel {
         }
     }
     async retry() {
+        var _a;
         if (!this.state.file)
             return false;
         if (!this.ensureOnline())
@@ -215,7 +223,10 @@ class PhotoEntryPageModel {
         if (!this.state.file.bytes && this.readFile) {
             try {
                 const bytes = await this.readFile(this.state.file.path);
-                return this.analyze({ ...this.state.file, bytes });
+                const selected = ((_a = this.state.file.contentType) === null || _a === void 0 ? void 0 : _a.startsWith('image/')) === false
+                    ? { ...this.state.file, bytes }
+                    : normalizeImageFile(this.state.file, bytes);
+                return this.analyze(selected);
             }
             catch (error) {
                 this.preserveFileError(this.state.file, error);
@@ -320,7 +331,7 @@ function readFileBytes(path) {
 }
 function createOnlineStatus() {
     var _a;
-    let online = true;
+    let online = false;
     if (typeof wx === 'undefined' || !wx.getNetworkType)
         return () => online;
     wx.getNetworkType({ success: (result) => { online = result.networkType !== 'none'; }, fail: () => { online = false; } });
@@ -354,12 +365,7 @@ function chooseImage(source) {
                 return;
             }
             try {
-                selected.bytes = await readFileBytes(selected.path);
-                const contentType = imageContentTypeForBytes(selected.bytes);
-                if (!contentType)
-                    throw new Error('文件类型与内容签名不匹配');
-                selected.contentType = contentType;
-                resolve(selected);
+                resolve(normalizeImageFile(selected, await readFileBytes(selected.path)));
             }
             catch (error) {
                 reject(new SelectedFileError(selected, error));

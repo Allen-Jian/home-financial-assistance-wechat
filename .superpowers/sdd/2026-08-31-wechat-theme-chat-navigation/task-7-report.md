@@ -43,3 +43,14 @@ Status: complete
 - RED: production-port tests for offline gating, upload retention, reread/retry, picker retry, and byte-signature MIME normalization failed before the new constructor ports and behavior existed.
 - GREEN: `npm test -- --runInBand tests/photo-entry.test.ts -t "offline|failed original upload|rereads|reopens|normalizes|opaque image"` — PASS, 7 tests.
 - Final clean-HEAD verification after the fix commit: full Jest, typecheck, WeChat build, `git diff --check`, and clean `git status`.
+
+## Fix round 2 implementation
+
+- Made `createOnlineStatus()` pessimistic while `wx.getNetworkType` is pending; only confirmed non-`none` connectivity enables analysis, staging, upload, or confirmation. Query failure remains blocked.
+- Reused the byte-signature MIME normalizer for every successful image read, including retry rereads, so opaque PNG/JPEG descriptors are corrected before validation and analysis.
+
+## Fix round 2 verification
+
+- RED: runtime pending-network and retry MIME regression tests failed before the exported pessimistic network runtime and shared retry normalizer existed.
+- GREEN: `npm test -- --runInBand tests/photo-entry.test.ts -t "async Wi-Fi|query failure|re-detects MIME"` — PASS, 3 tests.
+- Final clean-HEAD verification after the round 2 commit: full Jest, typecheck, WeChat build, `git diff --check`, and clean `git status`.
