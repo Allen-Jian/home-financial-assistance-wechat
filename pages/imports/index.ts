@@ -119,6 +119,18 @@ interface StageSnapshot {
   revision: number;
 }
 
+interface StageOutcome {
+  ok: boolean;
+  result?: StageResult;
+  error?: string;
+}
+
+interface DuplicateSnapshot {
+  row: ReconcileRow;
+  content: FileContent;
+  revision: number;
+}
+
 function asBytes(content: FileContent): Uint8Array {
   if (typeof content !== 'string') return content;
   return new TextEncoder().encode(content);
@@ -150,9 +162,10 @@ export class ImportPageModel {
   private content: FileContent | null = null;
   private readonly staged = new Map<string, StageResult>();
   private readonly uploadCompleted = new Set<string>();
-  private readonly stageInFlight = new Map<string, Promise<boolean>>();
+  private readonly stageInFlight = new Map<string, Promise<StageOutcome>>();
   private selectionRevision = 0;
   private confirmMissingInFlight: Promise<boolean> | null = null;
+  private readonly duplicateInFlight = new Map<string, Promise<boolean>>();
 
   constructor(
     private readonly picker: ImportPickerPort,
@@ -165,21 +178,32 @@ export class ImportPageModel {
     this.state.view = 'upload';
   }
 
-  choosePhoto(): Promise<boolean> { return this.select(this.picker.chooseMedia(), 'manual-photo'); }
+  choosePhoto(): Promise<boolean> {
+    const revision = this.beginSelection();
+    return this.select(this.picker.chooseMedia(), 'manual-photo', revision);
+  }
 
-  chooseAlbum(): Promise<boolean> { return this.select(this.picker.chooseAlbum(), 'manual-photo'); }
+  chooseAlbum(): Promise<boolean> {
+    const revision = this.beginSelection();
+    return this.select(this.picker.chooseAlbum(), 'manual-photo', revision);
+  }
 
   async chooseFile(): Promise<boolean> {
+    const revision = this.beginSelection();
     try {
       const file = await this.picker.chooseMessageFile();
+      if (!this.isCurrent(revision)) return false;
       const type: ImportSourceType | null = file.contentType === 'application/pdf' ? 'pdf' : file.contentType === 'text/csv' ? 'anz-csv' : file.contentType.startsWith('image/') ? 'manual-photo' : null;
-      return type ? this.select(Promise.resolve(file), type) : this.reject('文件类型不受支持');
+      return type ? this.select(Promise.resolve(file), type, revision) : this.reject('文件类型不受支持', revision);
     } catch (error) {
-      return this.reject(error instanceof Error ? error.message : '文件选择失败');
+      return this.isCurrent(revision) ? this.reject(error instanceof Error ? error.message : '文件选择失败', revision) : false;
     }
   }
 
-  chooseCsv(): Promise<boolean> { return this.select(this.picker.chooseMessageFile(), 'anz-csv'); }
+  chooseCsv(): Promise<boolean> {
+    const revision = this.beginSelection();
+    return this.select(this.picker.chooseMessageFile(), 'anz-csv', revision);
+  }
 
   toggleMissing(sourceFingerprint: string): void {
     this.state.missing = this.state.missing.map((row) => row.sourceFingerprint === sourceFingerprint ? { ...row, selected: !row.selected } : row);
@@ -240,26 +264,50 @@ export class ImportPageModel {
       return true;
     }
     if (!this.content || !this.api.confirmDraft) return this.reject('补录接口暂不可用');
+    const revision = this.selectionRevision;
+    const key = `${revision}:${sourceFingerprint}`;
+    if (this.duplicateInFlight.has(key)) return false;
+    const snapshot: DuplicateSnapshot = {
+      row: { ...row, candidates: [...row.candidates] },
+      content: typeof this.content === 'string' ? this.content : new Uint8Array(this.content),
+      revision,
+    };
+    this.state.loading = true;
+    this.state.error = '';
+    const pending = this.confirmDuplicate(snapshot);
+    this.duplicateInFlight.set(key, pending);
+    pending.then(() => {
+      if (this.duplicateInFlight.get(key) === pending) this.duplicateInFlight.delete(key);
+      if (!this.duplicateInFlight.size && this.isCurrent(revision)) this.state.loading = false;
+    }, () => {
+      if (this.duplicateInFlight.get(key) === pending) this.duplicateInFlight.delete(key);
+      if (!this.duplicateInFlight.size && this.isCurrent(revision)) this.state.loading = false;
+    });
+    return pending;
+  }
+
+  private async confirmDuplicate(snapshot: DuplicateSnapshot): Promise<boolean> {
     try {
-      const baseHash = await this.hashFile(this.content);
-      const result = await this.api.stageImport({ fileHash: `${baseHash}:${row.sourceFingerprint}:keep`, sourceType: 'anz-csv', draft: row });
+      const baseHash = await this.hashFile(snapshot.content);
+      const result = await this.api.stageImport({ fileHash: `${baseHash}:${snapshot.row.sourceFingerprint}:keep`, sourceType: 'anz-csv', draft: snapshot.row });
       const draftId = result.draft?.id ?? result.draftId;
       if (!draftId) throw new Error('未能生成待确认草稿');
-      await this.api.confirmDraft(draftId, { allowDuplicate: true });
-      row.resolution = 'keep-both';
+      await this.api.confirmDraft!(draftId, { allowDuplicate: true });
+      if (this.isCurrent(snapshot.revision)) {
+        const currentRow = this.state.duplicates.find((item) => item.sourceFingerprint === snapshot.row.sourceFingerprint);
+        if (currentRow) currentRow.resolution = 'keep-both';
+      }
       return true;
     } catch (error) {
-      this.state.error = error instanceof Error ? error.message : '重复项处理失败';
+      if (this.isCurrent(snapshot.revision)) this.state.error = error instanceof Error ? error.message : '重复项处理失败';
       return false;
     }
   }
 
   async parseText(input: string): Promise<boolean> {
+    const revision = this.beginSelection();
     const value = input.trim();
-    if (!value) return this.reject('请输入一笔账目描述');
-    const revision = ++this.selectionRevision;
-    this.state.loading = true;
-    this.state.error = '';
+    if (!value) return this.reject('请输入一笔账目描述', revision);
     try {
       const preview = await this.api.parseDraft(value);
       if (revision !== this.selectionRevision) return false;
@@ -275,11 +323,13 @@ export class ImportPageModel {
       this.content = value;
       return true;
     } catch (error) {
-      this.state.originalPreserved = true;
-      this.state.error = error instanceof Error ? error.message : 'AI 解析失败，请手工录入';
+      if (this.isCurrent(revision)) {
+        this.state.originalPreserved = true;
+        this.state.error = error instanceof Error ? error.message : 'AI 解析失败，请手工录入';
+      }
       return false;
     } finally {
-      this.state.loading = false;
+      if (this.isCurrent(revision)) this.state.loading = false;
     }
   }
 
@@ -289,39 +339,41 @@ export class ImportPageModel {
     this.state.loading = true;
     this.state.error = '';
     const fileHash = await this.hashFile(snapshot.content);
-    const key = this.stageKey(snapshot.revision, fileHash);
+    const key = this.stageKey(fileHash);
     const existing = this.stageInFlight.get(key);
-    if (existing) return existing;
-    const pending = this.runStage(snapshot, fileHash, key);
-    this.stageInFlight.set(key, pending);
+    const pending = existing ?? this.runStage(snapshot, fileHash, key);
+    if (!existing) this.stageInFlight.set(key, pending);
     try {
-      return await pending;
+      const outcome = await pending;
+      if (this.isCurrentSnapshot(snapshot)) {
+        if (outcome.result) this.state.stageResult = outcome.result;
+        if (outcome.ok && outcome.result) {
+          this.state.uploaded = this.uploadCompleted.has(key);
+          this.state.error = '';
+        } else {
+          this.state.originalPreserved = true;
+          this.state.error = outcome.error ?? '文件处理失败，请重试';
+        }
+        this.state.loading = false;
+      }
+      return outcome.ok;
     } finally {
       if (this.stageInFlight.get(key) === pending) this.stageInFlight.delete(key);
     }
   }
 
-  private async runStage(snapshot: StageSnapshot, fileHash: string, key: string): Promise<boolean> {
+  private async runStage(snapshot: StageSnapshot, fileHash: string, key: string): Promise<StageOutcome> {
+    let result: StageResult | undefined;
     try {
       const previous = this.staged.get(key);
-      const result = previous ?? (snapshot.sourceType === 'anz-csv'
+      result = previous ?? (snapshot.sourceType === 'anz-csv'
         ? await this.api.stageAnzCsv({ fileHash, csv: asText(snapshot.content) })
         : await this.api.stageImport({ fileHash, sourceType: snapshot.sourceType, draft: snapshot.preview ?? undefined }));
       this.staged.set(key, result);
-      if (this.isCurrent(snapshot)) {
-        this.state.stageResult = result;
-        this.state.uploaded = this.uploadCompleted.has(key);
-      }
       await this.completeOriginalUpload(snapshot, key, result);
-      return true;
+      return { ok: true, result };
     } catch (error) {
-      if (this.isCurrent(snapshot)) {
-        this.state.originalPreserved = true;
-        this.state.error = error instanceof Error ? error.message : '文件处理失败，请重试';
-      }
-      return false;
-    } finally {
-      if (this.isCurrent(snapshot)) this.state.loading = false;
+      return { ok: false, result, error: error instanceof Error ? error.message : '文件处理失败，请重试' };
     }
   }
 
@@ -329,27 +381,21 @@ export class ImportPageModel {
     const file = snapshot.file;
     const draftId = result.draft?.id ?? result.draftId;
     if (snapshot.sourceType === 'anz-csv' || !file || !this.api.uploadAttachment || !draftId) return;
-    if (this.uploadCompleted.has(key)) {
-      if (this.isCurrent(snapshot)) this.state.uploaded = true;
-      return;
-    }
+    if (this.uploadCompleted.has(key)) return;
     await this.api.uploadAttachment({ filePath: file.path, draftId, originalName: file.name, contentType: file.contentType });
     this.uploadCompleted.add(key);
-    if (this.isCurrent(snapshot)) this.state.uploaded = true;
   }
 
-  private async select(filePromise: Promise<PickedImportFile>, sourceType: ImportSourceType): Promise<boolean> {
-    this.state.loading = true;
-    this.state.view = this.state.mode === 'statement' ? 'analyzing' : 'preview';
-    this.state.error = '';
+  private async select(filePromise: Promise<PickedImportFile>, sourceType: ImportSourceType, revision: number): Promise<boolean> {
     try {
       const file = await filePromise;
-      const revision = ++this.selectionRevision;
+      if (!this.isCurrent(revision)) return false;
       if (file.size > MAX_IMPORT_BYTES) return this.reject('文件不能超过 20 MB');
       const content = file.bytes ?? file.text ?? await this.picker.readFile(file.path);
+      if (!this.isCurrent(revision)) return false;
       const selectedContent = content instanceof ArrayBuffer ? new Uint8Array(content) : content;
-      if (!signatureMatches(file, selectedContent)) return this.reject('文件类型与内容签名不匹配');
-      if (revision !== this.selectionRevision) return false;
+      if (!signatureMatches(file, selectedContent)) return this.reject('文件类型与内容签名不匹配', revision);
+      if (!this.isCurrent(revision)) return false;
       this.content = selectedContent;
       this.state.file = file;
       this.state.sourceType = sourceType;
@@ -360,37 +406,76 @@ export class ImportPageModel {
       this.state.uploaded = false;
       this.state.originalPreserved = true;
       this.state.textInput = '';
-      if (sourceType === 'anz-csv') this.state.rows = await this.api.previewAnzCsv(asText(selectedContent));
-      else {
-        const preview = await this.api.previewDocument({ filePath: file.path, fileName: file.name, contentType: file.contentType });
-        if (revision !== this.selectionRevision) return false;
-        this.state.preview = preview;
-        this.state.previewAmountDisplay = formatNzdMinor(this.state.preview.amountMinor);
+      this.state.matched = [];
+      this.state.duplicates = [];
+      this.state.missing = [];
+      this.state.selectedMissingCount = 0;
+      let rows: ImportedRow[] = [];
+      let preview: DocumentDraft | null = null;
+      if (sourceType === 'anz-csv') {
+        rows = await this.api.previewAnzCsv(asText(selectedContent));
+        if (!this.isCurrent(revision)) return false;
       }
-      if (this.state.mode === 'statement') {
-        if (!this.state.rows.length && this.state.preview) {
-          this.state.rows = [{
-            date: this.state.preview.occurredAt ?? new Date().toISOString().slice(0, 10),
-            amountMinor: this.state.preview.amountMinor,
-            direction: this.state.preview.direction,
-            merchant: this.state.preview.merchant,
+      else {
+        preview = await this.api.previewDocument({ filePath: file.path, fileName: file.name, contentType: file.contentType });
+        if (!this.isCurrent(revision)) return false;
+      }
+      const mode = this.state.mode;
+      if (mode === 'statement') {
+        if (!rows.length && preview) {
+          rows = [{
+            date: preview.occurredAt ?? new Date().toISOString().slice(0, 10),
+            amountMinor: preview.amountMinor,
+            direction: preview.direction,
+            merchant: preview.merchant,
             sourceFingerprint: `${file.name}:0`,
           }];
         }
-        await this.analyzeStatement();
+        const classified = await this.analyzeStatement(rows, revision);
+        if (!classified || !this.isCurrent(revision)) return false;
+        this.state.rows = rows;
+        this.state.preview = preview;
+        this.state.previewAmountDisplay = preview ? formatNzdMinor(preview.amountMinor) : '';
+        this.state.matched = classified.matched;
+        this.state.duplicates = classified.duplicates;
+        this.state.missing = classified.missing;
+        this.state.selectedMissingCount = classified.missing.length;
         this.state.view = 'results';
+      } else {
+        if (!this.isCurrent(revision)) return false;
+        this.state.rows = rows;
+        this.state.preview = preview;
+        this.state.previewAmountDisplay = preview ? formatNzdMinor(preview.amountMinor) : '';
       }
       return true;
     } catch (error) {
-      this.state.error = error instanceof Error ? error.message : '文件处理失败，请重试';
-      this.state.originalPreserved = true;
+      if (this.isCurrent(revision)) {
+        this.state.error = error instanceof Error ? error.message : '文件处理失败，请重试';
+        this.state.originalPreserved = true;
+      }
       return false;
     } finally {
-      this.state.loading = false;
+      if (this.isCurrent(revision)) this.state.loading = false;
     }
   }
 
-  private reject(message: string): false { this.state.error = message; this.state.loading = false; return false; }
+  private reject(message: string, revision?: number): false {
+    if (revision === undefined || this.isCurrent(revision)) {
+      this.state.error = message;
+      this.state.loading = false;
+    }
+    return false;
+  }
+
+  private beginSelection(): number {
+    this.selectionRevision += 1;
+    this.state.loading = true;
+    this.state.view = this.state.mode === 'statement' ? 'analyzing' : 'preview';
+    this.state.error = '';
+    return this.selectionRevision;
+  }
+
+  private isCurrent(revision: number): boolean { return revision === this.selectionRevision; }
 
   private createStageSnapshot(): StageSnapshot | null {
     if (!this.content || !this.state.sourceType) return null;
@@ -403,12 +488,12 @@ export class ImportPageModel {
     };
   }
 
-  private stageKey(revision: number, fileHash: string): string { return `${revision}:${fileHash}`; }
+  private stageKey(fileHash: string): string { return fileHash; }
 
-  private isCurrent(snapshot: StageSnapshot): boolean { return snapshot.revision === this.selectionRevision; }
+  private isCurrentSnapshot(snapshot: StageSnapshot): boolean { return this.isCurrent(snapshot.revision); }
 
-  private async analyzeStatement(): Promise<void> {
-    const classified = await Promise.all(this.state.rows.map(async (row): Promise<{ row: ReconcileRow; kind: 'matched' | 'duplicate' | 'missing' }> => {
+  private async analyzeStatement(rows: ImportedRow[], revision: number): Promise<{ matched: ReconcileRow[]; duplicates: ReconcileRow[]; missing: ReconcileRow[] } | null> {
+    const classified = await Promise.all(rows.map(async (row): Promise<{ row: ReconcileRow; kind: 'matched' | 'duplicate' | 'missing' } | null> => {
       const candidates = this.api.previewDuplicates ? await this.api.previewDuplicates({
         id: row.sourceFingerprint,
         amountMinor: row.amountMinor,
@@ -417,13 +502,17 @@ export class ImportPageModel {
         merchant: row.merchant,
         sourceFingerprint: row.sourceFingerprint,
       }) : [];
+      if (!this.isCurrent(revision)) return null;
       const item: ReconcileRow = { ...row, amountDisplay: `${row.direction === 'expense' ? '−' : '+'} ${formatNzdMinor(row.amountMinor)}`, selected: candidates.length === 0, candidates };
       return { row: item, kind: candidates.some((candidate) => candidate.score >= 95) ? 'matched' : candidates.length ? 'duplicate' : 'missing' };
     }));
-    this.state.matched = classified.filter((item) => item.kind === 'matched').map((item) => item.row);
-    this.state.duplicates = classified.filter((item) => item.kind === 'duplicate').map((item) => item.row);
-    this.state.missing = classified.filter((item) => item.kind === 'missing').map((item) => item.row);
-    this.state.selectedMissingCount = this.state.missing.length;
+    if (!this.isCurrent(revision) || classified.some((item) => !item)) return null;
+    const complete = classified as Array<{ row: ReconcileRow; kind: 'matched' | 'duplicate' | 'missing' }>;
+    return {
+      matched: complete.filter((item) => item.kind === 'matched').map((item) => item.row),
+      duplicates: complete.filter((item) => item.kind === 'duplicate').map((item) => item.row),
+      missing: complete.filter((item) => item.kind === 'missing').map((item) => item.row),
+    };
   }
 }
 
@@ -443,10 +532,12 @@ export function createImportPage(model: ImportPageModel) {
       this.setData(model.state);
       return pending.then(() => { this.setData(model.state); });
     },
-    async resolveDuplicate(this: PageContext, event: { currentTarget?: { dataset?: { id?: string; action?: string } } }) {
+    resolveDuplicate(this: PageContext, event: { currentTarget?: { dataset?: { id?: string; action?: string } } }) {
       const action = event.currentTarget?.dataset?.action;
-      if (action === 'later' || action === 'keep-both') await model.resolveDuplicate(event.currentTarget?.dataset?.id ?? '', action);
+      if (action !== 'later' && action !== 'keep-both') return;
+      const pending = model.resolveDuplicate(event.currentTarget?.dataset?.id ?? '', action);
       this.setData(model.state);
+      return pending.then(() => { this.setData(model.state); });
     },
   };
 }

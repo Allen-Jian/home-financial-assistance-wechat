@@ -247,3 +247,187 @@ test('statement confirmation is single-flight, snapshots rows, and renders loadi
   expect(api.confirmDraft).toHaveBeenNthCalledWith(2, 'draft-2', {});
   expect(model.state.loading).toBe(false);
 });
+
+test('a stale image read failure cannot overwrite a newer selection or its loading state', async () => {
+  const oldFile: PickedImportFile = { path: '/tmp/old.jpg', name: 'old.jpg', size: 1024, contentType: 'image/jpeg' };
+  const newFile: PickedImportFile = { ...image, path: '/tmp/new.jpg', name: 'new.jpg' };
+  const { model, picker, api } = makeModel([oldFile]);
+  let resolveOldFile!: (file: PickedImportFile) => void;
+  let rejectOldRead!: (error: Error) => void;
+  let resolveNewPreview!: (preview: { amountMinor: number; direction: 'expense'; merchant: string; confidence: number }) => void;
+  picker.chooseMedia
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveOldFile = resolve; }))
+    .mockResolvedValueOnce(newFile);
+  picker.readFile.mockImplementation((path: string) => path === oldFile.path
+    ? new Promise((_, reject) => { rejectOldRead = reject; })
+    : Promise.resolve(new Uint8Array([0xff, 0xd8, 0xff, 0xe1])));
+  api.previewDocument.mockImplementationOnce(() => new Promise((resolve) => { resolveNewPreview = resolve; }));
+
+  const oldSelection = model.choosePhoto();
+  resolveOldFile(oldFile);
+  await Promise.resolve();
+  await Promise.resolve();
+  const newSelection = model.choosePhoto();
+  await Promise.resolve();
+  expect(model.state.loading).toBe(true);
+  rejectOldRead(new Error('stale read failed'));
+  await expect(oldSelection).resolves.toBe(false);
+  expect(model.state.error).toBe('');
+  expect(model.state.loading).toBe(true);
+
+  resolveNewPreview({ amountMinor: 1250, direction: 'expense', merchant: 'New', confidence: 0.9 });
+  await expect(newSelection).resolves.toBe(true);
+  expect(model.state.file?.path).toBe(newFile.path);
+  expect(model.state.error).toBe('');
+  expect(model.state.loading).toBe(false);
+});
+
+test('a stale CSV preview and statement classification cannot replace a newer CSV result', async () => {
+  const oldCsv: PickedImportFile = { ...csv, path: '/tmp/old.csv', name: 'old.csv', text: 'old-csv' };
+  const newCsv: PickedImportFile = { ...csv, path: '/tmp/new.csv', name: 'new.csv', text: 'new-csv' };
+  const { model, picker, api } = makeModel([oldCsv]);
+  model.setMode('statement');
+  let resolveOldFile!: (file: PickedImportFile) => void;
+  let resolveNewFile!: (file: PickedImportFile) => void;
+  let resolveOldRows!: (rows: Array<{ date: string; amountMinor: number; direction: 'expense'; merchant: string; sourceFingerprint: string }>) => void;
+  picker.chooseMessageFile
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveOldFile = resolve; }))
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveNewFile = resolve; }));
+  api.previewAnzCsv.mockImplementation((value: string) => value === oldCsv.text
+    ? new Promise((resolve) => { resolveOldRows = resolve; })
+    : Promise.resolve([{ date: '2026-08-20', amountMinor: 2200, direction: 'expense' as const, merchant: 'New', sourceFingerprint: 'new-row' }]));
+  api.previewDuplicates.mockResolvedValue([]);
+
+  const oldSelection = model.chooseCsv();
+  resolveOldFile(oldCsv);
+  await Promise.resolve();
+  const newSelection = model.chooseCsv();
+  resolveNewFile(newCsv);
+  await expect(newSelection).resolves.toBe(true);
+  expect(model.state.rows).toEqual([expect.objectContaining({ sourceFingerprint: 'new-row' })]);
+  expect(model.state.missing).toEqual([expect.objectContaining({ sourceFingerprint: 'new-row' })]);
+
+  resolveOldRows([{ date: '2026-08-19', amountMinor: 1100, direction: 'expense', merchant: 'Old', sourceFingerprint: 'old-row' }]);
+  await expect(oldSelection).resolves.toBe(false);
+  expect(model.state.rows).toEqual([expect.objectContaining({ sourceFingerprint: 'new-row' })]);
+  expect(model.state.missing).toEqual([expect.objectContaining({ sourceFingerprint: 'new-row' })]);
+  expect(model.state.file?.path).toBe(newCsv.path);
+});
+
+test('a stale parse rejection cannot overwrite a newer file selection', async () => {
+  const { model, picker, api } = makeModel([image]);
+  let rejectParse!: (error: Error) => void;
+  api.parseDraft.mockImplementationOnce(() => new Promise((_, reject) => { rejectParse = reject; }));
+
+  const parsing = model.parseText('旧文本');
+  await Promise.resolve();
+  const selection = model.choosePhoto();
+  await expect(selection).resolves.toBe(true);
+  rejectParse(new Error('stale parse failed'));
+  await expect(parsing).resolves.toBe(false);
+
+  expect(model.state.file?.path).toBe(image.path);
+  expect(model.state.sourceType).toBe('manual-photo');
+  expect(model.state.error).toBe('');
+  expect(model.state.loading).toBe(false);
+});
+
+test('reselecting the same hash during stage shares one stage and upload', async () => {
+  const oldFile = { ...image, path: '/tmp/old-same.jpg', name: 'old-same.jpg' };
+  const currentFile = { ...image, path: '/tmp/current-same.jpg', name: 'current-same.jpg' };
+  const { model, picker, api } = makeModel([oldFile]);
+  picker.chooseAlbum.mockResolvedValueOnce(currentFile);
+  let resolveStage!: (result: { draftId: string; reused: boolean }) => void;
+  api.stageImport.mockImplementationOnce(() => new Promise((resolve) => { resolveStage = resolve; }));
+
+  await model.choosePhoto();
+  const oldStage = model.stage();
+  await Promise.resolve();
+  await model.chooseAlbum();
+  const currentStage = model.stage();
+  await Promise.resolve();
+
+  expect(api.stageImport).toHaveBeenCalledTimes(1);
+  resolveStage({ draftId: 'draft-same-hash', reused: false });
+  await expect(Promise.all([oldStage, currentStage])).resolves.toEqual([true, true]);
+  expect(api.uploadAttachment).toHaveBeenCalledTimes(1);
+  expect(api.uploadAttachment).toHaveBeenCalledWith(expect.objectContaining({ filePath: oldFile.path, draftId: 'draft-same-hash' }));
+  expect(model.state.file?.path).toBe(currentFile.path);
+  expect(model.state.stageResult).toEqual(expect.objectContaining({ draftId: 'draft-same-hash' }));
+  expect(model.state.uploaded).toBe(true);
+});
+
+test('reselecting a completed hash reuses stage and upload completion', async () => {
+  const { model, picker, api } = makeModel([image]);
+  picker.chooseAlbum.mockResolvedValueOnce({ ...image, path: '/tmp/reselected.jpg', name: 'reselected.jpg' });
+
+  await model.choosePhoto();
+  await expect(model.stage()).resolves.toBe(true);
+  await model.chooseAlbum();
+  await expect(model.stage()).resolves.toBe(true);
+
+  expect(api.stageImport).toHaveBeenCalledTimes(1);
+  expect(api.uploadAttachment).toHaveBeenCalledTimes(1);
+  expect(model.state.file?.path).toBe('/tmp/reselected.jpg');
+  expect(model.state.uploaded).toBe(true);
+});
+
+test('duplicate keep-both is single-flight per row and renders loading immediately', async () => {
+  const { model, api } = makeModel([csv]);
+  model.setMode('statement');
+  api.previewAnzCsv.mockResolvedValueOnce([
+    { date: '2026-08-17', amountMinor: 3500, direction: 'expense', merchant: 'First', sourceFingerprint: 'row-1' },
+    { date: '2026-08-18', amountMinor: 4500, direction: 'expense', merchant: 'Second', sourceFingerprint: 'row-2' },
+  ]);
+  api.previewDuplicates.mockResolvedValue([{ incomingId: 'row-1', existingId: 'tx-1', score: 85, reasons: ['date-near'] }]);
+  await model.chooseCsv();
+
+  const stageResolvers: Array<(result: { draftId: string; reused: boolean }) => void> = [];
+  api.stageImport.mockImplementation(() => new Promise((resolve) => { stageResolvers.push(resolve); }));
+  const confirmResolvers: Array<(result: { id: string }) => void> = [];
+  api.confirmDraft.mockImplementation(() => new Promise((resolve) => { confirmResolvers.push(resolve); }));
+  const page = createImportPage(model);
+  const setData = jest.fn();
+
+  const first = page.resolveDuplicate.call({ setData }, { currentTarget: { dataset: { id: 'row-1', action: 'keep-both' } } });
+  expect(model.state.loading).toBe(true);
+  expect(setData).toHaveBeenCalledWith(expect.objectContaining({ loading: true }));
+  await expect(model.resolveDuplicate('row-1', 'keep-both')).resolves.toBe(false);
+  const other = model.resolveDuplicate('row-2', 'keep-both');
+  await Promise.resolve();
+  expect(api.stageImport).toHaveBeenCalledTimes(2);
+
+  stageResolvers[0]({ draftId: 'draft-1', reused: false });
+  stageResolvers[1]({ draftId: 'draft-2', reused: false });
+  await Promise.resolve();
+  expect(api.confirmDraft).toHaveBeenCalledTimes(2);
+  expect(api.confirmDraft).toHaveBeenNthCalledWith(1, 'draft-1', { allowDuplicate: true });
+  expect(api.confirmDraft).toHaveBeenNthCalledWith(2, 'draft-2', { allowDuplicate: true });
+  confirmResolvers[0]({ id: 'tx-1' });
+  confirmResolvers[1]({ id: 'tx-2' });
+  await expect(Promise.all([first, other])).resolves.toEqual([undefined, true]);
+  expect(model.state.duplicates).toEqual(expect.arrayContaining([
+    expect.objectContaining({ sourceFingerprint: 'row-1', resolution: 'keep-both' }),
+    expect.objectContaining({ sourceFingerprint: 'row-2', resolution: 'keep-both' }),
+  ]));
+  expect(model.state.loading).toBe(false);
+});
+
+test('failed duplicate keep-both can be retried after its guard is released', async () => {
+  const { model, api } = makeModel([csv]);
+  model.setMode('statement');
+  api.previewAnzCsv.mockResolvedValueOnce([{ date: '2026-08-17', amountMinor: 3500, direction: 'expense', merchant: 'First', sourceFingerprint: 'row-1' }]);
+  api.previewDuplicates.mockResolvedValue([{ incomingId: 'row-1', existingId: 'tx-1', score: 85, reasons: ['date-near'] }]);
+  await model.chooseCsv();
+  api.stageImport
+    .mockRejectedValueOnce(new Error('keep-both stage failed'))
+    .mockResolvedValueOnce({ draftId: 'draft-retry', reused: false });
+
+  await expect(model.resolveDuplicate('row-1', 'keep-both')).resolves.toBe(false);
+  expect(model.state.error).toContain('keep-both stage failed');
+  await expect(model.resolveDuplicate('row-1', 'keep-both')).resolves.toBe(true);
+
+  expect(api.stageImport).toHaveBeenCalledTimes(2);
+  expect(api.confirmDraft).toHaveBeenCalledTimes(1);
+  expect(model.state.duplicates).toEqual([expect.objectContaining({ sourceFingerprint: 'row-1', resolution: 'keep-both' })]);
+});
