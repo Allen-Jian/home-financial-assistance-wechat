@@ -103,7 +103,8 @@ class ImportPageModel {
             if (!type)
                 return this.handlePickerFailure(new Error('文件类型不受支持'), attempt);
             const revision = this.beginSelection();
-            return this.select(Promise.resolve(file), type, revision);
+            this.activateFileDescriptor(file, type, revision);
+            return this.select(Promise.resolve(file), type, revision, true);
         }
         catch (error) {
             return this.handlePickerFailure(error, attempt);
@@ -327,13 +328,14 @@ class ImportPageModel {
         await this.api.uploadAttachment({ filePath: file.path, draftId, originalName: file.name, contentType: file.contentType });
         this.uploadCompleted.add(key);
     }
-    async select(filePromise, sourceType, revision) {
+    async select(filePromise, sourceType, revision, descriptorActivated = false) {
         var _a, _b, _c;
         try {
             const file = await filePromise;
             if (!this.isCurrent(revision))
                 return false;
-            this.activateFileDescriptor(file, sourceType, revision);
+            if (!descriptorActivated)
+                this.activateFileDescriptor(file, sourceType, revision);
             if (file.size > exports.MAX_IMPORT_BYTES)
                 return this.reject('文件不能超过 20 MB');
             const content = (_b = (_a = file.bytes) !== null && _a !== void 0 ? _a : file.text) !== null && _b !== void 0 ? _b : await this.picker.readFile(file.path);
@@ -434,7 +436,8 @@ class ImportPageModel {
             if (!this.isCurrentPickerAttempt(attempt))
                 return false;
             const revision = this.beginSelection();
-            return this.select(Promise.resolve(file), sourceType, revision);
+            this.activateFileDescriptor(file, sourceType, revision);
+            return this.select(Promise.resolve(file), sourceType, revision, true);
         }
         catch (error) {
             return this.handlePickerFailure(error, attempt);

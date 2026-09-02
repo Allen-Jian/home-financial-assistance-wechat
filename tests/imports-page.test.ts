@@ -636,3 +636,23 @@ test('only the latest overlapping picker attempt can accept a new selection', as
   expect(model.state.error).toBe('');
   expect((model as unknown as { selectionRevision: number }).selectionRevision).toBe(revisionBefore);
 });
+
+test('a successful picker descriptor replaces the visible binding before its read starts', async () => {
+  const { model, picker } = makeModel([image]);
+  await model.choosePhoto();
+  const newFile: PickedImportFile = { path: '/tmp/accepted-before-read.jpg', name: 'accepted-before-read.jpg', size: 1024, contentType: 'image/jpeg' };
+  let resolveRead!: (content: Uint8Array) => void;
+  picker.chooseAlbum.mockResolvedValueOnce(newFile);
+  picker.readFile.mockImplementationOnce(() => new Promise((resolve) => { resolveRead = resolve; }));
+
+  const pending = model.chooseAlbum();
+  await Promise.resolve();
+  expect(model.state.file).toEqual(newFile);
+  expect((model as unknown as { content?: unknown }).content).toBeNull();
+  expect(model.state.stageResult).toBeNull();
+  expect(model.state.uploaded).toBe(false);
+
+  await Promise.resolve();
+  resolveRead(new Uint8Array([0xff, 0xd8, 0xff, 0xe1]));
+  await expect(pending).resolves.toBe(true);
+});

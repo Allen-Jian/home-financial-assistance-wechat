@@ -201,7 +201,8 @@ export class ImportPageModel {
       const type: ImportSourceType | null = file.contentType === 'application/pdf' ? 'pdf' : file.contentType === 'text/csv' ? 'anz-csv' : file.contentType.startsWith('image/') ? 'manual-photo' : null;
       if (!type) return this.handlePickerFailure(new Error('文件类型不受支持'), attempt);
       const revision = this.beginSelection();
-      return this.select(Promise.resolve(file), type, revision);
+      this.activateFileDescriptor(file, type, revision);
+      return this.select(Promise.resolve(file), type, revision, true);
     } catch (error) {
       return this.handlePickerFailure(error, attempt);
     }
@@ -393,11 +394,11 @@ export class ImportPageModel {
     this.uploadCompleted.add(key);
   }
 
-  private async select(filePromise: Promise<PickedImportFile>, sourceType: ImportSourceType, revision: number): Promise<boolean> {
+  private async select(filePromise: Promise<PickedImportFile>, sourceType: ImportSourceType, revision: number, descriptorActivated = false): Promise<boolean> {
     try {
       const file = await filePromise;
       if (!this.isCurrent(revision)) return false;
-      this.activateFileDescriptor(file, sourceType, revision);
+      if (!descriptorActivated) this.activateFileDescriptor(file, sourceType, revision);
       if (file.size > MAX_IMPORT_BYTES) return this.reject('文件不能超过 20 MB');
       const content = file.bytes ?? file.text ?? await this.picker.readFile(file.path);
       if (!this.isCurrent(revision)) return false;
@@ -489,7 +490,8 @@ export class ImportPageModel {
       const file = await filePromise;
       if (!this.isCurrentPickerAttempt(attempt)) return false;
       const revision = this.beginSelection();
-      return this.select(Promise.resolve(file), sourceType, revision);
+      this.activateFileDescriptor(file, sourceType, revision);
+      return this.select(Promise.resolve(file), sourceType, revision, true);
     } catch (error) {
       return this.handlePickerFailure(error, attempt);
     }
