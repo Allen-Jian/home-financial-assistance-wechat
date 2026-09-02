@@ -77,3 +77,20 @@
 - `git diff --check`：exit 0；`git diff --check fd2de0c..HEAD`：exit 0（最终文档提交后复核）。
 - Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-7290665` 从提交 `7290665` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
 - DevTools、真机、生产 API/VPS 仍保持 `未执行`；没有 push/deploy。
+
+## Round 4 imports final review fixes
+
+### RED / GREEN 证据
+
+- New descriptor binding：RED：旧图片已 stage/upload 后，新 descriptor 在 read 阶段失败时仍保留旧 file/content，`stage()` 可错误复用旧 upload；新增 deferred 回归先失败。GREEN：descriptor 返回后先原子替换可见 file 并清空 content、stage/upload/preview/rows/reconciliation/confirmed 状态；read 失败保留新 descriptor 但 stage 无 content 时返回 false、零网络调用，重试读入新 bytes 后只 stage/upload 新文件。
+- Duplicate loading：RED：旧 revision keep-both 仍 pending 时，新 revision 成功完成会因全局 map 非空而保持 loading。GREEN：cleanup 只检查当前 revision 的 in-flight keys；旧 revision late success/failure 不改写当前 loading/error，当前 revision 多行仍保持 loading 至最后一行完成。
+- Statement reset：新增测试验证新 statement descriptor 激活时 `confirmedMissingCount` 归零；聚焦测试通过。
+
+### Round 4 verification
+
+- Code/tests commit：`0de4f1c` (`fix: isolate new import descriptors and duplicate loading`)。
+- Imports 聚焦：`npm test -- --runInBand tests/imports-page.test.ts`：1 suite、25 tests passed。
+- 全量：`npm test -- --runInBand`：29 suites、216 tests passed。
+- `npm run typecheck`：exit 0；`npm run build:wechat`：exit 0。
+- `git diff --check` 与 `git diff --check fd2de0c..HEAD`：将在本轮文档提交后复核并记录。
+- Windows-style clean clone：将在本轮文档提交后重新构建并记录；DevTools、真机、生产 API/VPS 仍保持 `未执行`。
