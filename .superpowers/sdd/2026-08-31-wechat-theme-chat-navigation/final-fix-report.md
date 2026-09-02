@@ -94,3 +94,20 @@
 - `npm run typecheck`：exit 0；`npm run build:wechat`：exit 0。
 - `git diff --check`：exit 0；`git diff --check fd2de0c..HEAD`：exit 0（最终文档提交后复核）。
 - Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-d7f55d2` 从提交 `d7f55d2` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。DevTools、真机、生产 API/VPS 仍保持 `未执行`。
+
+## Round 5 imports picker-cancellation fixes
+
+### RED / GREEN 证据
+
+- Picker attempt ownership：RED：新增 deferred 回归后，`npm test -- --runInBand tests/imports-page.test.ts` 为 25 项通过、3 项失败；打开 statement picker 立即把 view/loading 改为 analyzing、accepted `selectionRevision` 递增，且取消中的新 picker 会干扰 pending keep-both。
+- Picker attempt ownership：GREEN：picker invocation 只递增独立 `pickerAttempt`；只有当前 attempt 成功得到新 descriptor 后才开始 accepted selection/revision。旧 attempt 的迟到 success/cancel 被丢弃；recognized cancel 静默返回 false 并保留 file/content/view/loading/error/rows/counts/stage/duplicate state。keep-both 已完成后重复 resolve 不再重复 stage/confirm。
+
+### Round 5 verification
+
+- Code/tests commit：`c04d625` (`fix: preserve import state on picker cancellation`)。
+- 聚焦：`npm test -- --runInBand tests/imports-page.test.ts`：1 suite、28 tests passed。
+- 全量：`npm test -- --runInBand`：29 suites、219 tests passed。
+- `npm run typecheck`：exit 0；`npm run build:wechat`：exit 0。
+- `git diff --check fd2de0c..HEAD`：exit 0；最终文档提交后另复核 `git diff --check` 与同一 range-aware 命令。
+- Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-c04d625` 从 `c04d625` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
+- DevTools、真机、生产 API/VPS 仍保持 `未执行`；没有 push/deploy。
