@@ -119,3 +119,22 @@
 - `git diff --check fd2de0c..HEAD`：exit 0；最终文档提交后另复核 `git diff --check` 与同一 range-aware 命令。
 - Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-c04d625` 从 `c04d625` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
 - DevTools、真机、生产 API/VPS 仍保持 `未执行`；没有 push/deploy。
+
+## Post-review remediation 1: terminal keep-both and picker page rendering
+
+### RED / GREEN 证据
+
+- Terminal keep-both：RED：新增成功 keep-both → later → keep-both deferred/click regression 后，旧实现先处理 `later`，会把已确认的 keep-both 改成 later，并允许再次发起 stage/confirm。
+- Terminal keep-both：GREEN：completed `keep-both` guard 在任一 action 分支前执行；已确认行对 later 与重复 keep-both 均返回 false，resolution、stage、confirm 均不变。
+- Page rendering：RED：picker 返回新 descriptor、`readFile` deferred 时，page handler 只在整个选择/读取/preview 完成后 setData，无法即时展示新 file/loading/清空旧 stage。
+- Page rendering：GREEN：model 在 accepted descriptor 激活后调用单次 `onAccepted` callback；四个 picker page handler 在 callback 中立即 `setData`，完成后再做 final render。取消不调用 callback，且无状态变化时不渲染。
+
+### Verification
+
+- Code/tests commit：`3d0db22` (`fix: finalize import confirmation and picker rendering`)。
+- 聚焦：`npm test -- --runInBand tests/imports-page.test.ts`：1 suite、31 tests passed。
+- 全量：`npm test -- --runInBand`：29 suites、222 tests passed。
+- `npm run typecheck`：exit 0；`npm run build:wechat`：exit 0。
+- `git diff --check fd2de0c..HEAD` 与 `git diff --check`：exit 0（最终文档提交后复核）。
+- Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-3d0db22` 从 `3d0db22` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
+- DevTools、真机、生产 API/VPS 仍保持 `未执行`；没有 push/deploy。
