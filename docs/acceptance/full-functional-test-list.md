@@ -75,7 +75,7 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 | AUTO-06 | 异步写入竞态与重试安全 | AI 发送/清除、图片草稿绑定/确认、原件上传失败重试均不越过人工确认边界 | `tests/ai-page.test.ts`、`tests/photo-entry.test.ts`、`tests/imports-page.test.ts` deferred 回归覆盖；imports 本轮 31 tests 全绿，含 terminal keep-both 与 picker accepted-state 即时页面渲染 | 通过 |
 | THEME-01 | 浅色主题 | 页面、tabBar、原生栏和回弹色保持浅色令牌 | 自动化 source/runtime contract 已验证 `frontColor: '#000000'`；局部 DevTools 页面/原生栏/tab 证据见 `THEME-01-DEVTOOLS`，回弹与设备验收仍未执行 | 未执行 |
 | THEME-02 | 暗夜主题 | 页面、tabBar、原生栏和回弹色保持暗色令牌 | 自动化 source/runtime contract 已验证 `frontColor: '#ffffff'`；局部 DevTools 页面/原生栏证据见 `THEME-02-DEVTOOLS`，回弹与设备验收仍未执行 | 未执行 |
-| THEME-03 | 跟随系统主题 | 系统浅/深色变化后页面与原生区域同步 | 本轮未连接 DevTools 或设备 | 未执行 |
+| THEME-03 | 跟随系统主题 | 系统浅/深色变化后页面与原生区域同步 | 本轮未触发或观察系统主题切换；真机设备验收仍未执行 | 未执行 |
 | THEME-04 | 主题重启持久化 | 选择主题后重启小程序仍恢复该偏好 | compile/reload 局部 DevTools 证据见 `THEME-04-DEVTOOLS`；设备重启验收仍未执行 | 未执行 |
 | UI-01 | 原生栏与安全区 | navigation/background 原生色、底部安全区在三主题下正确 | navigation/background source/runtime contract 已自动验证；仍需 DevTools/真机当前截图或录屏确认原生栏与安全区 | 未执行 |
 | UI-02 | 上下回弹 | 页面上下回弹背景与主题一致，不出现白边或遮挡 | 需要 DevTools/真机当前操作 | 未执行 |
@@ -131,7 +131,7 @@ git diff --check
 git status --short --branch
 ```
 
-API 当前工作树的既有修改包括 `apps/api/src/ai/ai-chat.service.ts`、`apps/api/src/ai/minimax.client.ts`、对应测试以及认证文件；本轮没有编辑、部署、重启或触碰数据库、Redis、volume、migration、凭据。生产 502、微信开发者工具当前会话和真机状态均保持待后续授权/设备验收。
+API 当前工作树的既有修改包括 `apps/api/src/ai/ai-chat.service.ts`、`apps/api/src/ai/minimax.client.ts`、对应测试以及认证文件；本轮没有编辑、部署、重启或触碰数据库、Redis、volume、migration、凭据。微信开发者工具仅完成了上表记录的局部证据，综合 `DEVTOOLS-01` 仍未执行；生产 502 与真机状态均保持待后续授权/设备验收。
 
 ## 功能清单
 
