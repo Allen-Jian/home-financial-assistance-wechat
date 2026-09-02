@@ -57,4 +57,4 @@
 - 微信构建：`npm run build:wechat`：exit 0。
 - `npm run typecheck`：exit 0。
 - `git diff --check`：exit 0；`git diff --check fd2de0c..HEAD`：exit 0（均在最终文档提交后复核）。
-- Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-65ff5e8` 从最终提交 freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
+- Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-65ff5e8` 从代码/验收提交 `65ff5e8` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。其后仅追加本报告证据提交。
