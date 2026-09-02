@@ -413,6 +413,80 @@ test('duplicate keep-both is single-flight per row and renders loading immediate
   expect(model.state.loading).toBe(false);
 });
 
+test('an old duplicate flight cannot keep current revision loading after its successor completes', async () => {
+  const { model, picker, api } = makeModel([csv]);
+  model.setMode('statement');
+  api.previewDuplicates.mockResolvedValue([{ incomingId: 'row-1', existingId: 'tx-1', score: 85, reasons: ['date-near'] }]);
+  await model.chooseCsv();
+  const stageResolvers: Array<{ resolve: (result: { draftId: string; reused: boolean }) => void; reject: (error: Error) => void }> = [];
+  api.stageImport.mockImplementation(() => new Promise((resolve, reject) => { stageResolvers.push({ resolve, reject }); }));
+  const confirmResolvers: Array<(result: { id: string }) => void> = [];
+  api.confirmDraft.mockImplementation(() => new Promise((resolve) => { confirmResolvers.push(resolve); }));
+
+  const oldFlight = model.resolveDuplicate('row-1', 'keep-both');
+  await Promise.resolve();
+  picker.chooseMessageFile.mockResolvedValueOnce({ ...csv, path: '/tmp/new-statement.csv', name: 'new-statement.csv' });
+  await model.chooseCsv();
+  const currentFlight = model.resolveDuplicate('row-1', 'keep-both');
+  await Promise.resolve();
+  expect(stageResolvers).toHaveLength(2);
+
+  stageResolvers[1].resolve({ draftId: 'draft-current', reused: false });
+  await Promise.resolve();
+  confirmResolvers[0]({ id: 'tx-current' });
+  await expect(currentFlight).resolves.toBe(true);
+  expect(model.state.loading).toBe(false);
+  expect(model.state.error).toBe('');
+
+  stageResolvers[0].reject(new Error('old duplicate failed late'));
+  await expect(oldFlight).resolves.toBe(false);
+  expect(model.state.loading).toBe(false);
+  expect(model.state.error).toBe('');
+});
+
+test('current duplicate flights keep loading true until the last row completes', async () => {
+  const { model, api } = makeModel([csv]);
+  model.setMode('statement');
+  api.previewAnzCsv.mockResolvedValueOnce([
+    { date: '2026-08-17', amountMinor: 3500, direction: 'expense', merchant: 'First', sourceFingerprint: 'row-1' },
+    { date: '2026-08-18', amountMinor: 4500, direction: 'expense', merchant: 'Second', sourceFingerprint: 'row-2' },
+  ]);
+  api.previewDuplicates.mockResolvedValue([{ incomingId: 'row-1', existingId: 'tx-1', score: 85, reasons: ['date-near'] }]);
+  await model.chooseCsv();
+  const stageResolvers: Array<(result: { draftId: string; reused: boolean }) => void> = [];
+  api.stageImport.mockImplementation(() => new Promise((resolve) => { stageResolvers.push(resolve); }));
+  const confirmResolvers: Array<(result: { id: string }) => void> = [];
+  api.confirmDraft.mockImplementation(() => new Promise((resolve) => { confirmResolvers.push(resolve); }));
+
+  const first = model.resolveDuplicate('row-1', 'keep-both');
+  const second = model.resolveDuplicate('row-2', 'keep-both');
+  await Promise.resolve();
+  stageResolvers[0]({ draftId: 'draft-1', reused: false });
+  stageResolvers[1]({ draftId: 'draft-2', reused: false });
+  await Promise.resolve();
+  confirmResolvers[0]({ id: 'tx-1' });
+  await expect(first).resolves.toBe(true);
+  expect(model.state.loading).toBe(true);
+  confirmResolvers[1]({ id: 'tx-2' });
+  await expect(second).resolves.toBe(true);
+  expect(model.state.loading).toBe(false);
+});
+
+test('a new statement selection clears the prior confirmed missing count', async () => {
+  const { model, picker, api } = makeModel([csv]);
+  model.setMode('statement');
+  api.previewDuplicates.mockResolvedValue([]);
+  await model.chooseCsv();
+  model.state.confirmedMissingCount = 3;
+  picker.chooseMessageFile.mockResolvedValueOnce({ ...csv, path: '/tmp/new-count.csv', name: 'new-count.csv' });
+
+  const pending = model.chooseCsv();
+  await Promise.resolve();
+  expect(model.state.confirmedMissingCount).toBe(0);
+  await expect(pending).resolves.toBe(true);
+  expect(model.state.confirmedMissingCount).toBe(0);
+});
+
 test('failed duplicate keep-both can be retried after its guard is released', async () => {
   const { model, api } = makeModel([csv]);
   model.setMode('statement');
@@ -430,4 +504,47 @@ test('failed duplicate keep-both can be retried after its guard is released', as
   expect(api.stageImport).toHaveBeenCalledTimes(2);
   expect(api.confirmDraft).toHaveBeenCalledTimes(1);
   expect(model.state.duplicates).toEqual([expect.objectContaining({ sourceFingerprint: 'row-1', resolution: 'keep-both' })]);
+});
+
+test('a new descriptor replaces old binding before read and remains retryable after read failure', async () => {
+  const oldFile = { ...image, path: '/tmp/old-bound.jpg', name: 'old-bound.jpg' };
+  const newFile: PickedImportFile = { path: '/tmp/new-bound.jpg', name: 'new-bound.jpg', size: 1024, contentType: 'image/jpeg' };
+  const hash = (content: Uint8Array | string) => content instanceof Uint8Array && content[3] === 0xe0 ? 'old-bound-hash' : 'new-bound-hash';
+  const { model, picker, api } = makeModel([oldFile], hash);
+  api.stageImport.mockResolvedValueOnce({ draftId: 'draft-old-bound', reused: false }).mockResolvedValueOnce({ draftId: 'draft-new-bound', reused: false });
+  picker.chooseAlbum.mockResolvedValueOnce(newFile).mockResolvedValueOnce(newFile);
+  let rejectRead!: (error: Error) => void;
+  picker.readFile
+    .mockImplementationOnce(() => new Promise((_, reject) => { rejectRead = reject; }))
+    .mockResolvedValueOnce(new Uint8Array([0xff, 0xd8, 0xff, 0xe1]));
+
+  await model.choosePhoto();
+  await expect(model.stage()).resolves.toBe(true);
+  expect(model.state.stageResult).toEqual(expect.objectContaining({ draftId: 'draft-old-bound' }));
+  const newSelection = model.chooseAlbum();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  expect(model.state.file).toEqual(newFile);
+  expect((model as unknown as { content?: unknown }).content).toBeNull();
+  expect(model.state.stageResult).toBeNull();
+  expect(model.state.uploaded).toBe(false);
+  expect(model.state.preview).toBeNull();
+  expect(model.state.rows).toEqual([]);
+  expect(model.state.missing).toEqual([]);
+  await expect(model.stage()).resolves.toBe(false);
+  expect(api.uploadAttachment).toHaveBeenCalledTimes(1);
+  expect(api.stageImport).toHaveBeenCalledTimes(1);
+
+  rejectRead(new Error('new read failed'));
+  await expect(newSelection).resolves.toBe(false);
+  expect(model.state.file).toEqual(newFile);
+  expect(model.state.error).toContain('new read failed');
+
+  const retry = model.chooseAlbum();
+  await expect(retry).resolves.toBe(true);
+  await expect(model.stage()).resolves.toBe(true);
+  expect(api.stageImport).toHaveBeenCalledTimes(2);
+  expect(api.uploadAttachment).toHaveBeenLastCalledWith(expect.objectContaining({ filePath: newFile.path, draftId: 'draft-new-bound' }));
+  expect(model.state.uploaded).toBe(true);
 });

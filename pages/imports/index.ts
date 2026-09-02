@@ -278,10 +278,10 @@ export class ImportPageModel {
     this.duplicateInFlight.set(key, pending);
     pending.then(() => {
       if (this.duplicateInFlight.get(key) === pending) this.duplicateInFlight.delete(key);
-      if (!this.duplicateInFlight.size && this.isCurrent(revision)) this.state.loading = false;
+      if (this.isCurrent(revision) && !this.hasDuplicateFlightForRevision(revision)) this.state.loading = false;
     }, () => {
       if (this.duplicateInFlight.get(key) === pending) this.duplicateInFlight.delete(key);
-      if (!this.duplicateInFlight.size && this.isCurrent(revision)) this.state.loading = false;
+      if (this.isCurrent(revision) && !this.hasDuplicateFlightForRevision(revision)) this.state.loading = false;
     });
     return pending;
   }
@@ -335,7 +335,7 @@ export class ImportPageModel {
 
   async stage(): Promise<boolean> {
     const snapshot = this.createStageSnapshot();
-    if (!snapshot) return this.reject('请先选择文件或输入账目描述');
+    if (!snapshot) return this.state.file ? false : this.reject('请先选择文件或输入账目描述');
     this.state.loading = true;
     this.state.error = '';
     const fileHash = await this.hashFile(snapshot.content);
@@ -390,6 +390,7 @@ export class ImportPageModel {
     try {
       const file = await filePromise;
       if (!this.isCurrent(revision)) return false;
+      this.activateFileDescriptor(file, sourceType, revision);
       if (file.size > MAX_IMPORT_BYTES) return this.reject('文件不能超过 20 MB');
       const content = file.bytes ?? file.text ?? await this.picker.readFile(file.path);
       if (!this.isCurrent(revision)) return false;
@@ -397,19 +398,6 @@ export class ImportPageModel {
       if (!signatureMatches(file, selectedContent)) return this.reject('文件类型与内容签名不匹配', revision);
       if (!this.isCurrent(revision)) return false;
       this.content = selectedContent;
-      this.state.file = file;
-      this.state.sourceType = sourceType;
-      this.state.preview = null;
-      this.state.previewAmountDisplay = '';
-      this.state.rows = [];
-      this.state.stageResult = null;
-      this.state.uploaded = false;
-      this.state.originalPreserved = true;
-      this.state.textInput = '';
-      this.state.matched = [];
-      this.state.duplicates = [];
-      this.state.missing = [];
-      this.state.selectedMissingCount = 0;
       let rows: ImportedRow[] = [];
       let preview: DocumentDraft | null = null;
       if (sourceType === 'anz-csv') {
@@ -475,7 +463,31 @@ export class ImportPageModel {
     return this.selectionRevision;
   }
 
+  private activateFileDescriptor(file: PickedImportFile, sourceType: ImportSourceType, revision: number): void {
+    if (!this.isCurrent(revision)) return;
+    this.content = null;
+    this.state.file = file;
+    this.state.sourceType = sourceType;
+    this.state.preview = null;
+    this.state.previewAmountDisplay = '';
+    this.state.rows = [];
+    this.state.stageResult = null;
+    this.state.uploaded = false;
+    this.state.originalPreserved = true;
+    this.state.textInput = '';
+    this.state.matched = [];
+    this.state.duplicates = [];
+    this.state.missing = [];
+    this.state.selectedMissingCount = 0;
+    this.state.confirmedMissingCount = 0;
+  }
+
   private isCurrent(revision: number): boolean { return revision === this.selectionRevision; }
+
+  private hasDuplicateFlightForRevision(revision: number): boolean {
+    const prefix = `${revision}:`;
+    return [...this.duplicateInFlight.keys()].some((key) => key.startsWith(prefix));
+  }
 
   private createStageSnapshot(): StageSnapshot | null {
     if (!this.content || !this.state.sourceType) return null;

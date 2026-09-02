@@ -191,12 +191,12 @@ class ImportPageModel {
         pending.then(() => {
             if (this.duplicateInFlight.get(key) === pending)
                 this.duplicateInFlight.delete(key);
-            if (!this.duplicateInFlight.size && this.isCurrent(revision))
+            if (this.isCurrent(revision) && !this.hasDuplicateFlightForRevision(revision))
                 this.state.loading = false;
         }, () => {
             if (this.duplicateInFlight.get(key) === pending)
                 this.duplicateInFlight.delete(key);
-            if (!this.duplicateInFlight.size && this.isCurrent(revision))
+            if (this.isCurrent(revision) && !this.hasDuplicateFlightForRevision(revision))
                 this.state.loading = false;
         });
         return pending;
@@ -260,7 +260,7 @@ class ImportPageModel {
         var _a;
         const snapshot = this.createStageSnapshot();
         if (!snapshot)
-            return this.reject('请先选择文件或输入账目描述');
+            return this.state.file ? false : this.reject('请先选择文件或输入账目描述');
         this.state.loading = true;
         this.state.error = '';
         const fileHash = await this.hashFile(snapshot.content);
@@ -324,6 +324,7 @@ class ImportPageModel {
             const file = await filePromise;
             if (!this.isCurrent(revision))
                 return false;
+            this.activateFileDescriptor(file, sourceType, revision);
             if (file.size > exports.MAX_IMPORT_BYTES)
                 return this.reject('文件不能超过 20 MB');
             const content = (_b = (_a = file.bytes) !== null && _a !== void 0 ? _a : file.text) !== null && _b !== void 0 ? _b : await this.picker.readFile(file.path);
@@ -335,19 +336,6 @@ class ImportPageModel {
             if (!this.isCurrent(revision))
                 return false;
             this.content = selectedContent;
-            this.state.file = file;
-            this.state.sourceType = sourceType;
-            this.state.preview = null;
-            this.state.previewAmountDisplay = '';
-            this.state.rows = [];
-            this.state.stageResult = null;
-            this.state.uploaded = false;
-            this.state.originalPreserved = true;
-            this.state.textInput = '';
-            this.state.matched = [];
-            this.state.duplicates = [];
-            this.state.missing = [];
-            this.state.selectedMissingCount = 0;
             let rows = [];
             let preview = null;
             if (sourceType === 'anz-csv') {
@@ -418,7 +406,30 @@ class ImportPageModel {
         this.state.error = '';
         return this.selectionRevision;
     }
+    activateFileDescriptor(file, sourceType, revision) {
+        if (!this.isCurrent(revision))
+            return;
+        this.content = null;
+        this.state.file = file;
+        this.state.sourceType = sourceType;
+        this.state.preview = null;
+        this.state.previewAmountDisplay = '';
+        this.state.rows = [];
+        this.state.stageResult = null;
+        this.state.uploaded = false;
+        this.state.originalPreserved = true;
+        this.state.textInput = '';
+        this.state.matched = [];
+        this.state.duplicates = [];
+        this.state.missing = [];
+        this.state.selectedMissingCount = 0;
+        this.state.confirmedMissingCount = 0;
+    }
     isCurrent(revision) { return revision === this.selectionRevision; }
+    hasDuplicateFlightForRevision(revision) {
+        const prefix = `${revision}:`;
+        return [...this.duplicateInFlight.keys()].some((key) => key.startsWith(prefix));
+    }
     createStageSnapshot() {
         if (!this.content || !this.state.sourceType)
             return null;
