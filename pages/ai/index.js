@@ -13,6 +13,12 @@ const CHAT_END_ID = 'chat-end';
 const COMPOSER_GAP_PX = 8;
 const LIST_GAP_PX = 12;
 const CUSTOM_TAB_HEIGHT_RPX = 112;
+const RAISED_ACTION_DIAMETER_RPX = 86;
+// The raised action clears the tab bar by approximately half its diameter.
+const RAISED_ACTION_PROTRUSION_RPX = RAISED_ACTION_DIAMETER_RPX / 2;
+// Keep the composer above the action's shadow and leave a small visual gap.
+const CLOSED_ACTION_GAP_RPX = 21;
+const CLOSED_CUSTOM_TAB_CLEARANCE_RPX = CUSTOM_TAB_HEIGHT_RPX + RAISED_ACTION_PROTRUSION_RPX + CLOSED_ACTION_GAP_RPX;
 const DEFAULT_WINDOW_WIDTH_PX = 375;
 function nonNegativeFinite(value, fallback = 0) {
     return Number.isFinite(value) ? Math.max(0, value) : fallback;
@@ -22,10 +28,10 @@ function calculateChatInsets(keyboard, composer, safe, windowWidth = DEFAULT_WIN
     const composerHeightPx = nonNegativeFinite(composer);
     const safeAreaBottomPx = nonNegativeFinite(safe);
     const windowWidthPx = nonNegativeFinite(windowWidth, DEFAULT_WINDOW_WIDTH_PX);
-    const customTabHeightPx = CUSTOM_TAB_HEIGHT_RPX * windowWidthPx / 750;
+    const customTabClearancePx = CLOSED_CUSTOM_TAB_CLEARANCE_RPX * windowWidthPx / 750;
     const composerBottomPx = keyboardHeightPx > 0
         ? keyboardHeightPx + COMPOSER_GAP_PX
-        : customTabHeightPx + safeAreaBottomPx + COMPOSER_GAP_PX;
+        : customTabClearancePx + safeAreaBottomPx;
     return { composerBottomPx, listBottomInsetPx: composerBottomPx + composerHeightPx + LIST_GAP_PX };
 }
 function citationDisplay(citation) {

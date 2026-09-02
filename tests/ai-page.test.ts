@@ -25,9 +25,24 @@ test('exposes the three read-only quick questions', () => {
 
 test('calculates composer and list insets above the keyboard or custom tab bar', () => {
   expect(calculateChatInsets(280, 96, 24, 320)).toEqual({ composerBottomPx: 288, listBottomInsetPx: 396 });
-  expect(calculateChatInsets(0, 96, 24, 320)).toEqual({ composerBottomPx: 79.78666666666666, listBottomInsetPx: 187.78666666666666 });
-  expect(calculateChatInsets(0, 96, 24, 375).composerBottomPx).toBeCloseTo(88, 8);
-  expect(calculateChatInsets(0, 96, 24, 428).composerBottomPx).toBeCloseTo(95.91466666666667, 8);
+  expect(calculateChatInsets(0, 96, 24, 320)).toEqual({ composerBottomPx: 99.09333333333333, listBottomInsetPx: 207.09333333333333 });
+  expect(calculateChatInsets(0, 96, 24, 375).composerBottomPx).toBeCloseTo(112, 8);
+  expect(calculateChatInsets(0, 96, 24, 428).composerBottomPx).toBeCloseTo(124.43733333333333, 8);
+});
+
+test('uses the smallest closed-state clearance that clears the raised action at supported widths', () => {
+  const closedClearanceRpx = 176;
+  const raisedActionTopRpx = 112 + 86 / 2;
+  const visualGapRpx = 21;
+
+  expect(closedClearanceRpx).toBeGreaterThanOrEqual(raisedActionTopRpx + visualGapRpx);
+  for (const windowWidthPx of [320, 375, 428]) {
+    const insets = calculateChatInsets(0, 96, 24, windowWidthPx);
+    const expectedComposerBottomPx = closedClearanceRpx * windowWidthPx / 750 + 24;
+    expect(insets.composerBottomPx).toBeCloseTo(expectedComposerBottomPx, 10);
+    expect(insets.listBottomInsetPx).toBeCloseTo(expectedComposerBottomPx + 96 + 12, 10);
+    expect(calculateChatInsets(280, 96, 24, windowWidthPx).composerBottomPx).toBe(288);
+  }
 });
 
 test('registers one keyboard listener and resets it on hide and unload', async () => {
@@ -54,7 +69,7 @@ test('registers one keyboard listener and resets it on hide and unload', async (
     expect(model.state.composerBottomPx).toBe(288);
     listeners[0]({ height: 0 });
     expect(model.state.keyboardHeightPx).toBe(0);
-    expect(model.state.composerBottomPx).toBe(88);
+    expect(model.state.composerBottomPx).toBe(112);
 
     page.onHide.call(context);
     expect(offKeyboardHeightChange).toHaveBeenCalledTimes(1);
@@ -83,7 +98,7 @@ test('measures composer changes and scrolls to the stable chat end anchor', asyn
     await page.onShow.call(context);
     page.onComposerLineChange.call(context, { detail: { height: 200 } });
     expect(model.state.composerHeightPx).toBe(144);
-    expect(model.state.listBottomInsetPx).toBe(220);
+    expect(model.state.listBottomInsetPx).toBe(244);
     expect(setData).toHaveBeenCalledWith(expect.objectContaining({ scrollTarget: '' }));
     expect(setData).toHaveBeenCalledWith(expect.objectContaining({ scrollTarget: 'chat-end' }));
 
@@ -116,7 +131,7 @@ test('applies safe-area metrics before unresolved history hydration and scrolls 
     const pending = page.onShow.call(context);
     await Promise.resolve();
 
-    expect(setData).toHaveBeenNthCalledWith(1, expect.objectContaining({ composerBottomPx: expect.closeTo(47.7866666667 + 40 + 8, 8) }));
+    expect(setData).toHaveBeenNthCalledWith(1, expect.objectContaining({ composerBottomPx: expect.closeTo(75.0933333333 + 40, 8) }));
     expect(setData).toHaveBeenCalledWith(expect.objectContaining({ scrollTarget: '' }));
     expect(nextTicks).toHaveLength(1);
     nextTicks.shift()?.();
@@ -288,7 +303,7 @@ test('teardown resets keyboard state without rendering and reactivates on the ne
     expect(model.state.keyboardHeightPx).toBe(0);
 
     await page.onShow.call(context);
-    expect(setData).toHaveBeenCalledWith(expect.objectContaining({ keyboardHeightPx: 0, composerBottomPx: expect.closeTo(104, 8) }));
+    expect(setData).toHaveBeenCalledWith(expect.objectContaining({ keyboardHeightPx: 0, composerBottomPx: expect.closeTo(128, 8) }));
     expect(listeners).toHaveLength(2);
   } finally {
     (globalThis as { wx?: unknown }).wx = previousWx;

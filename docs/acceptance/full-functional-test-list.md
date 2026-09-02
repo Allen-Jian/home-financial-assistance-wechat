@@ -67,7 +67,7 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 
 | ID | 验收项 | 验收标准 | 证据/限制 | 状态 |
 |---|---|---|---|---|
-| AUTO-01 | 本地自动化测试 | Jest 全量 suites/tests 通过 | `npm test -- --runInBand`：29 suites、223 tests 通过 | 通过 |
+| AUTO-01 | 本地自动化测试 | Jest 全量 suites/tests 通过 | `npm test -- --runInBand`：29 suites、224 tests 通过 | 通过 |
 | AUTO-02 | TypeScript 类型检查 | typecheck 退出码为 0 | `npm run typecheck`：退出码 0 | 通过 |
 | AUTO-03 | 微信构建 | 生成微信端 TypeScript 对应产物且退出码为 0 | `npm run build:wechat`：退出码 0 | 通过 |
 | AUTO-04 | 工作树检查 | 无 whitespace error，提交前状态可核对 | `git diff --check fd2de0c..HEAD`：退出码 0；另执行 `git diff --check`，本轮开始于 clean HEAD | 通过 |
@@ -87,7 +87,7 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 | AI-01-MANUAL | 短消息视觉收缩 | 短文本在微信渲染中自然收缩，不出现整行宽气泡或错位 | 需要 DevTools/真机当前视觉检查；本轮未执行 | 未执行 |
 | AI-02-AUTO | 长消息气泡结构契约 | 长文本允许换行，scope/insight/citation 保持在同一 AI 气泡内 | Jest 覆盖 WXML 结构、WXSS 最大宽度和换行规则 | 通过 |
 | AI-02-MANUAL | 长消息视觉换行 | 真正的长回答在微信渲染中换行且不挤压引用内容 | 需要 DevTools/真机当前视觉检查；本轮未执行 | 未执行 |
-| AI-03-AUTO | 键盘布局契约 | 键盘高度、inset、生命周期和 `chat-end` 锚点计算正确 | Jest 覆盖模型契约与回调注册/解绑 | 通过 |
+| AI-03-AUTO | 键盘布局契约 | 键盘高度、inset、生命周期和 `chat-end` 锚点计算正确 | Jest 覆盖模型契约与回调注册/解绑；闭合态按 112rpx tab + 43rpx raised action protrusion + 21rpx gap = 176rpx，并在 320/375/428px 宽度验证 | 通过 |
 | AI-03-MANUAL | 键盘、输入法与多行 | 键盘出现/收起、输入法和多行输入时输入框可见并滚到最新消息 | 需要 DevTools/真机当前输入操作；本轮未执行 | 未执行 |
 | IMAGE-01-AUTO | 相机来源调用契约 | `chooseMedia` 使用 camera-only 并进入统一识别草稿链 | Jest mock 覆盖来源参数与统一分析路径；真实相机另行验收 | 通过 |
 | IMAGE-02-AUTO | 相册来源调用契约 | `chooseMedia` 使用 album-only 并进入统一识别草稿链 | Jest mock 覆盖来源参数与统一分析路径；真实相册另行验收 | 通过 |
