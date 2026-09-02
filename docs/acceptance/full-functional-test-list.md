@@ -67,10 +67,10 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 
 | ID | 验收项 | 验收标准 | 证据/限制 | 状态 |
 |---|---|---|---|---|
-| AUTO-01 | 本地自动化测试 | Jest 全量 suites/tests 通过 | `npm test -- --runInBand`：29 suites、198 tests 通过 | 通过 |
+| AUTO-01 | 本地自动化测试 | Jest 全量 suites/tests 通过 | `npm test -- --runInBand`：29 suites、205 tests 通过 | 通过 |
 | AUTO-02 | TypeScript 类型检查 | typecheck 退出码为 0 | `npm run typecheck`：退出码 0 | 通过 |
 | AUTO-03 | 微信构建 | 生成微信端 TypeScript 对应产物且退出码为 0 | `npm run build:wechat`：退出码 0 | 通过 |
-| AUTO-04 | 工作树检查 | 无 whitespace error，提交前状态可核对 | `git diff --check`：退出码 0；本轮开始于 clean HEAD | 通过 |
+| AUTO-04 | 工作树检查 | 无 whitespace error，提交前状态可核对 | `git diff --check fd2de0c..HEAD`：退出码 0；另执行 `git diff --check`，本轮开始于 clean HEAD | 通过 |
 | AUTO-05 | 生产连接运行层 | 未确认/失败/none 时 request/upload 均为零，恢复在线后才放行并可 dispose | `tests/runtime-bootstrap.test.ts` 覆盖 pending callback、query fail、none、restore 与真实 `createAppRuntime` API transport | 通过 |
 | AUTO-06 | 异步写入竞态与重试安全 | AI 发送/清除、图片草稿绑定/确认、原件上传失败重试均不越过人工确认边界 | `tests/ai-page.test.ts`、`tests/photo-entry.test.ts`、`tests/imports-page.test.ts` deferred 回归覆盖 | 通过 |
 | THEME-01 | 浅色主题 | 页面、tabBar、原生栏和回弹色保持浅色令牌 | 本轮未连接 DevTools 或设备 | 未执行 |

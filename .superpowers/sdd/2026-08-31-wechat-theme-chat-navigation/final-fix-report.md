@@ -40,3 +40,19 @@
 - Clean clone evidence：`D:\self\家庭手账APP-wechat-clean-clone-458b204` 从 commit `458b204` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 后 `npm run build:wechat` exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
 
 微信开发者工具、真机、生产 API/VPS 仍保持 `未执行`，没有因本地自动化结果改变其状态；没有 push/deploy。
+
+## Round 2 final review fixes
+
+### RED / GREEN 证据
+
+- ConnectivityRuntime：RED：`tests/runtime-bootstrap.test.ts` 新增延迟初始 success/fail 与 dispose 回调测试后，2 项失败（事件后的延迟 success 覆盖 offline；dispose 后 fail/事件改写状态）。GREEN：`eventSeen`、generation 和 disposed guard 使网络状态事件权威，初始回调及销毁后的回调均不再变更状态；生产 `createAppRuntime` 的 request/upload gate 回归通过。
+- AI composer：RED：`tests/ai-page.test.ts` 新增 deferred `sendCurrent` 草稿归属与空历史 hydrate 错误清理测试后，2 项失败（第二次调用等待首个请求、旧 error 未清理）。GREEN：in-flight send 立即返回 false；提交文本只在 draft 未被改写时清空；当前成功 hydrate（含空历史）清除旧 error。
+- Imports stage/confirm：RED：`tests/imports-page.test.ts` 新增同一选择快速双击、旧 stage 延迟后切换新文件、statement confirm 双击/选中行变更测试后，stage 快照/上传出现重复调用或把新文件传给旧 draft，confirm 页面未立即渲染 loading。GREEN：selection revision、不可变 stage snapshot、stage/upload 单航、旧操作 UI guard，以及 statement selected-row snapshot/dedicated in-flight guard 均通过；页面先渲染 loading 再等待结果。
+
+### Round 2 verification
+
+- Code/tests commit：`eba9400` (`fix: close final async integration races`)。
+- 聚焦：`npm test -- --runInBand tests/imports-page.test.ts tests/runtime-bootstrap.test.ts tests/ai-page.test.ts`：3 suites、47 tests passed。
+- 全量：`npm test -- --runInBand`：29 suites、205 tests passed。
+- 微信构建：`npm run build:wechat`：exit 0。
+- `npm run typecheck`、两种 `git diff --check`（工作树与 `fd2de0c..HEAD`）及 Windows-style clean-clone build 将在文档提交后重新执行并记录最终结果。
