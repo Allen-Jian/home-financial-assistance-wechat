@@ -67,17 +67,17 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 
 | ID | 验收项 | 验收标准 | 证据/限制 | 状态 |
 |---|---|---|---|---|
-| AUTO-01 | 本地自动化测试 | Jest 全量 suites/tests 通过 | `npm test -- --runInBand`：29 suites、222 tests 通过 | 通过 |
+| AUTO-01 | 本地自动化测试 | Jest 全量 suites/tests 通过 | `npm test -- --runInBand`：29 suites、223 tests 通过 | 通过 |
 | AUTO-02 | TypeScript 类型检查 | typecheck 退出码为 0 | `npm run typecheck`：退出码 0 | 通过 |
 | AUTO-03 | 微信构建 | 生成微信端 TypeScript 对应产物且退出码为 0 | `npm run build:wechat`：退出码 0 | 通过 |
 | AUTO-04 | 工作树检查 | 无 whitespace error，提交前状态可核对 | `git diff --check fd2de0c..HEAD`：退出码 0；另执行 `git diff --check`，本轮开始于 clean HEAD | 通过 |
 | AUTO-05 | 生产连接运行层 | 未确认/失败/none 时 request/upload 均为零，恢复在线后才放行并可 dispose | `tests/runtime-bootstrap.test.ts` 覆盖 pending callback、query fail、none、restore 与真实 `createAppRuntime` API transport | 通过 |
 | AUTO-06 | 异步写入竞态与重试安全 | AI 发送/清除、图片草稿绑定/确认、原件上传失败重试均不越过人工确认边界 | `tests/ai-page.test.ts`、`tests/photo-entry.test.ts`、`tests/imports-page.test.ts` deferred 回归覆盖；imports 本轮 31 tests 全绿，含 terminal keep-both 与 picker accepted-state 即时页面渲染 | 通过 |
-| THEME-01 | 浅色主题 | 页面、tabBar、原生栏和回弹色保持浅色令牌 | 本轮未连接 DevTools 或设备 | 未执行 |
-| THEME-02 | 暗夜主题 | 页面、tabBar、原生栏和回弹色保持暗色令牌 | 本轮未连接 DevTools 或设备 | 未执行 |
+| THEME-01 | 浅色主题 | 页面、tabBar、原生栏和回弹色保持浅色令牌 | 自动化 source/runtime contract 已验证 `frontColor: '#000000'`；实际 DevTools/设备视觉仍待当前构建验收 | 未执行 |
+| THEME-02 | 暗夜主题 | 页面、tabBar、原生栏和回弹色保持暗色令牌 | 自动化 source/runtime contract 已验证 `frontColor: '#ffffff'`；实际 DevTools/设备原生栏截图仍待当前构建验收 | 未执行 |
 | THEME-03 | 跟随系统主题 | 系统浅/深色变化后页面与原生区域同步 | 本轮未连接 DevTools 或设备 | 未执行 |
 | THEME-04 | 主题重启持久化 | 选择主题后重启小程序仍恢复该偏好 | 本轮未连接 DevTools 或设备；自动化只覆盖运行层契约 | 未执行 |
-| UI-01 | 原生栏与安全区 | navigation/background 原生色、底部安全区在三主题下正确 | 需要 DevTools/真机当前截图或录屏 | 未执行 |
+| UI-01 | 原生栏与安全区 | navigation/background 原生色、底部安全区在三主题下正确 | navigation/background source/runtime contract 已自动验证；仍需 DevTools/真机当前截图或录屏确认原生栏与安全区 | 未执行 |
 | UI-02 | 上下回弹 | 页面上下回弹背景与主题一致，不出现白边或遮挡 | 需要 DevTools/真机当前操作 | 未执行 |
 | NAV-01 | 五槽自定义导航 | 固定显示：首页、账目、记账、AI 聊天、设置 | Jest 静态/行为测试覆盖五槽和真实 tab 路径 | 通过 |
 | NAV-02 | 旧加号清理 | 首页不再显示旧 FAB/旧加号入口 | Jest 检查首页旧 FAB 标记与处理器已移除 | 通过 |

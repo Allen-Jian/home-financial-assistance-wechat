@@ -138,3 +138,21 @@
 - `git diff --check fd2de0c..HEAD` 与 `git diff --check`：exit 0（最终文档提交后复核）。
 - Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-3d0db22` 从 `3d0db22` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
 - DevTools、真机、生产 API/VPS 仍保持 `未执行`；没有 push/deploy。
+
+## DevTools remediation 1: native header front-color casing
+
+### RED / GREEN 证据
+
+- RED：主题 runtime 回归将 dark navigation `frontColor` 精确改为 WeChat 允许值 `#ffffff` 后，`npm test -- --runInBand tests/theme-runtime.test.ts` 出现 2 项失败；实现仍发送 `#FFFFFF`，而 light `#000000` 已符合契约。
+- GREEN：`ThemeRuntime` dark native header 改为 `#ffffff`，light 保持 `#000000`；新增回归同时断言两种 exact lowercase allowed values，并已重新生成 `src/shared/theme-runtime.js`。
+- 父任务提供的现场观察：dark snapshot/page/tab 已工作，但原生 header 在旧构建中保持浅色；手动调用 `wx.setNavigationBarColor({ frontColor: '#ffffff' })` 即时修复。该观察支持修复方向，但本任务未重新编译/截图运行 DevTools，因此不提升 manual THEME/UI/DEVTOOLS 行状态。
+
+### Verification
+
+- Code/tests commit：`fc347ee` (`fix: use allowed native theme front colors`)。
+- 聚焦：`npm test -- --runInBand tests/theme-runtime.test.ts tests/theme.test.ts tests/runtime-bootstrap.test.ts`：3 suites、19 tests passed。
+- 全量：`npm test -- --runInBand`：29 suites、223 tests passed。
+- `npm run typecheck`：exit 0；`npm run build:wechat`：exit 0。
+- `git diff --check fd2de0c..HEAD` 与 `git diff --check`：exit 0（最终文档提交后复核）。
+- Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-fc347ee` 从 `fc347ee` freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
+- 生产/VPS、DevTools 当前重编译与真机截图仍未由本任务执行；没有 push/deploy。
