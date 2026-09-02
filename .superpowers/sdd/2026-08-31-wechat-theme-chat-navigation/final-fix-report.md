@@ -55,4 +55,6 @@
 - 聚焦：`npm test -- --runInBand tests/imports-page.test.ts tests/runtime-bootstrap.test.ts tests/ai-page.test.ts`：3 suites、47 tests passed。
 - 全量：`npm test -- --runInBand`：29 suites、205 tests passed。
 - 微信构建：`npm run build:wechat`：exit 0。
-- `npm run typecheck`、两种 `git diff --check`（工作树与 `fd2de0c..HEAD`）及 Windows-style clean-clone build 将在文档提交后重新执行并记录最终结果。
+- `npm run typecheck`：exit 0。
+- `git diff --check`：exit 0；`git diff --check fd2de0c..HEAD`：exit 0（均在最终文档提交后复核）。
+- Windows-style clean clone：`D:\self\家庭手账APP-wechat-clean-clone-65ff5e8` 从最终提交 freshly cloned，设置 `core.autocrlf=true`，`npm ci --ignore-scripts` 与 `npm run build:wechat` 均 exit 0；`git status --short` 为空；39 个 Git-tracked `*.js` 文件检查到 0 个 CR 字节。
