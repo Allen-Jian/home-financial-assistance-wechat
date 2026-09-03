@@ -1,0 +1,9 @@
+<page-meta page-style="{{themePageStyle}}" />
+<view class="page entry-page {{themeClass}}">
+  <view class="entry-appbar"><button class="close-button" bindtap="close" aria-label="关闭记账流程">×</button><text>记一笔</text><view class="appbar-spacer"></view></view>
+  <view class="entry-intro"><text>今天想怎么记录？</text><text>无论哪种方式，都会先确认再入账。</text></view>
+  <button class="method-card primary-method" bindtap="openPhoto"><view class="method-icon camera-icon"></view><view><text>拍照记账</text><text>拍下小票，AI 自动整理金额、商户和分类</text></view><text class="chevron">›</text></button>
+  <button class="method-card" bindtap="openManual"><view class="method-icon pencil-icon"></view><view><text>手动记账</text><text>适合没有小票的日常支出和收入</text></view><text class="chevron">›</text></button>
+  <button class="method-card" bindtap="openBillFile"><view class="method-icon file-icon"></view><view><text>导入账单文件</text><text>水电、网络、煤气账单的图片或 PDF</text></view><text class="chevron">›</text></button>
+  <view class="safety-note"><view class="shield-icon">✓</view><text>AI 只生成草稿，不会自动改动家庭账本。</text></view>
+</view>

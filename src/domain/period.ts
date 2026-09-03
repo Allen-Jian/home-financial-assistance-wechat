@@ -28,7 +28,7 @@ function aucklandMidnightUtc(year: number, month: number, day: number): Date {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hourCycle: 'h23',
+    hour12: false,
   });
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const parts = formatter.formatToParts(new Date(guess));

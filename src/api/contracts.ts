@@ -17,6 +17,11 @@ export interface WechatLoginResponse extends TokenPair {
   isNewUser: boolean;
 }
 
+export interface PasswordLoginRequest {
+  username: string;
+  password: string;
+}
+
 export interface BreakdownRow {
   label: string;
   direction: Direction;
@@ -25,6 +30,9 @@ export interface BreakdownRow {
 
 export interface DashboardSummary {
   netWorthMinor: number;
+  totalAssetsMinor?: number;
+  initialAssetsMinor?: number;
+  termDepositMinor?: number;
   incomeMinor: number;
   expenseMinor: number;
   categoryBreakdown: BreakdownRow[];
@@ -40,12 +48,29 @@ export interface AccountSummary {
   name: string;
   kind: AccountKind;
   openingBalanceMinor: number;
+  systemKey?: string | null;
+  version?: number;
 }
 
 export interface CategorySummary {
   id: string;
   name: string;
   direction: 'income' | 'expense';
+  active?: boolean;
+}
+
+export type TermDepositStatus = 'active' | 'matured' | 'closed';
+
+export interface TermDepositSummary {
+  id: string;
+  name: string;
+  principalMinor: number;
+  annualRateBasisPoints: number;
+  startedAt: string;
+  maturesAt: string;
+  status: TermDepositStatus;
+  note?: string | null;
+  version: number;
 }
 
 export interface TransactionSummary {
@@ -86,9 +111,12 @@ export interface ImportedRow {
 }
 
 export interface StageResult {
-  batchId: string;
-  draftCount: number;
   reused: boolean;
+  batch?: { id: string };
+  draft?: { id: string };
+  drafts?: Array<{ id: string }>;
+  batchId?: string;
+  draftCount?: number;
   draftId?: string;
 }
 
@@ -98,6 +126,10 @@ export interface DocumentDraft {
   occurredAt?: string;
   merchant?: string;
   note?: string;
+  categoryHint?: string;
+  categoryId?: string;
+  accountHint?: string;
+  fieldConfidence?: Record<string, number>;
   confidence?: number;
 }
 
@@ -137,8 +169,31 @@ export interface AiCitation {
   merchant?: string;
 }
 
+export interface AiInsight {
+  type: string;
+  title: string;
+  value?: number;
+  unit?: string;
+  detail?: string;
+}
+
+export interface AiConversationSummary {
+  id: string;
+  title?: string;
+  updatedAt: string;
+  expiresAt: string;
+  messages?: AiMessageDto[];
+}
+
+export interface AiMessageDto {
+  role: 'user' | 'assistant';
+  contentJson: unknown;
+}
+
 export interface AiAnswer {
   answer: string;
   scope: { from: string; to: string };
   citations: AiCitation[];
+  conversationId: string;
+  insights: AiInsight[];
 }

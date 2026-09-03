@@ -8,6 +8,7 @@ test('uses Auckland month, quarter, and year query boundaries', async () => {
   const model = new ReportPageModel(api);
   const anchor = new Date('2026-08-15T00:00:00.000Z');
   await model.load('month', anchor);
+  expect(model.state).toEqual(expect.objectContaining({ incomeDisplay: 'NZ$20.00', expenseDisplay: 'NZ$10.00', netDisplay: '+ NZ$10.00' }));
   expect(api.fetchReports).toHaveBeenLastCalledWith({ from: '2026-07-31T12:00:00.000Z', to: '2026-08-31T12:00:00.000Z' });
   await model.load('quarter', anchor);
   expect(api.fetchReports).toHaveBeenLastCalledWith({ from: '2026-06-30T12:00:00.000Z', to: '2026-09-30T11:00:00.000Z' });
@@ -36,6 +37,7 @@ test('recurring templates remind and advance without creating a transaction', as
   const model = new RecurringPageModel(api);
   await model.load();
   expect(model.state.dueCount).toBe(1);
+  expect(model.state.templates[0]).toEqual(expect.objectContaining({ amountDisplay: 'NZ$90.00' }));
   await expect(model.advance('r-1')).resolves.toBe(true);
   expect(api.advanceRecurring).toHaveBeenCalledWith('r-1');
   expect(api.createTransaction).not.toHaveBeenCalled();

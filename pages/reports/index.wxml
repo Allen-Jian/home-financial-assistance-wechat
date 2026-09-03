@@ -1,8 +1,9 @@
-<view class="page reports-page">
+<page-meta page-style="{{themePageStyle}}" />
+<view class="page reports-page {{themeClass}}">
   <view class="page-title"><text>报表</text><text class="sub">先看净现金流，再下钻分类</text></view>
-  <view class="period-switch"><button class="{{periodKind === 'month' ? 'active' : ''}}">月</button><button class="{{periodKind === 'quarter' ? 'active' : ''}}">季</button><button class="{{periodKind === 'year' ? 'active' : ''}}">年</button></view>
-  <view wx:if="{{report}}" class="cashflow-card"><text>净现金流</text><text class="cashflow">NZ$ {{(report.incomeMinor - report.expenseMinor) / 100}}</text><view class="cashflow-line"><text>收入 NZ$ {{report.incomeMinor / 100}}</text><text>支出 NZ$ {{report.expenseMinor / 100}}</text></view></view>
-  <view wx:if="{{report}}" class="section"><text class="section-title">分类</text><block wx:for="{{report.categoryBreakdown}}" wx:key="label"><view class="breakdown-row"><text>{{item.label}}</text><text>NZ$ {{item.amountMinor / 100}}</text></view></block></view>
+  <view class="period-switch"><button bindtap="changePeriod" data-kind="month" class="{{periodKind === 'month' ? 'active' : ''}}">月</button><button bindtap="changePeriod" data-kind="quarter" class="{{periodKind === 'quarter' ? 'active' : ''}}">季</button><button bindtap="changePeriod" data-kind="year" class="{{periodKind === 'year' ? 'active' : ''}}">年</button></view>
+  <view wx:if="{{report}}" class="cashflow-card"><text>净现金流</text><text class="cashflow money-number">{{netDisplay}}</text><view class="cashflow-line"><text>收入 {{incomeDisplay}}</text><text>支出 {{expenseDisplay}}</text></view></view>
+  <view wx:if="{{report}}" class="section"><text class="section-title">分类</text><block wx:for="{{categoryBreakdown}}" wx:key="label"><view bindtap="drillDown" data-category="{{item.label}}" class="breakdown-row"><text>{{item.label}}</text><text class="money-number">{{item.amountDisplay}}</text></view></block><view wx:if="{{!categoryBreakdown.length}}" class="empty">这个期间还没有分类数据</view></view>
   <view class="export-row"><button bindtap="exportJson">导出 JSON</button><button bindtap="exportCsv">导出 CSV</button></view>
   <text wx:if="{{error}}" class="error">{{error}}</text>
 </view>

@@ -1,13 +1,15 @@
-<view class="page ledger-page">
-  <view class="page-title"><text>快速记账</text><text class="sub">保存前会检查重复</text></view>
-  <view class="direction-switch"><button class="{{direction === 'expense' ? 'active' : ''}}" data-value="expense">支出</button><button class="{{direction === 'income' ? 'active' : ''}}" data-value="income">收入</button><button class="{{direction === 'transfer' ? 'active' : ''}}" data-value="transfer">转账</button></view>
-  <view class="amount-box"><text class="currency">NZ$</text><input class="amount-input" type="digit" placeholder="0.00" value="{{amount}}" /></view>
-  <view class="field-row"><text>账户</text><picker mode="selector" range="{{accounts}}" range-key="name"><text class="picker-value">{{accountName || '选择账户'}}</text></picker></view>
-  <view class="field-row"><text>分类</text><picker mode="selector" range="{{categories}}" range-key="name"><text class="picker-value">{{categoryName || '选择分类'}}</text></picker></view>
-  <view class="field-row"><text>日期</text><picker mode="date" value="{{occurredAt}}"><text class="picker-value">{{occurredAt}}</text></picker></view>
-  <textarea class="note" placeholder="备注（可选）" value="{{note}}"></textarea>
-  <button class="attachment" open-type="chooseAvatar">📎 添加小票或单据</button>
-  <text wx:if="{{error}}" class="error">{{error}}</text>
-  <view wx:if="{{duplicateActions.length}}" class="duplicate-panel"><text class="duplicate-title">发现可能重复</text><text class="duplicate-detail">请确认是否与已有账目相同</text><view class="duplicate-actions"><button bindtap="later">稍后处理</button><button class="primary-button" bindtap="keepBoth">保留两笔</button></view></view>
-  <button class="primary-button save-button">保存账目</button>
+<page-meta page-style="{{themePageStyle}}" />
+<view class="page ledger-page {{themeClass}}">
+  <view class="ledger-header"><text class="ledger-title">账目</text><text class="ledger-subtitle">查看每一笔已确认的家庭收支</text></view>
+  <view class="period-nav"><button bindtap="changeMonth" data-delta="-1" aria-label="上一个月">‹</button><text>{{periodMode === 'year' ? '年度账目' : periodMode === 'custom' ? '自定义期间' : '本月账目'}}</text><button bindtap="changeMonth" data-delta="1" aria-label="下一个月">›</button></view>
+  <view class="period-segment"><button bindtap="changePeriod" data-mode="month" class="{{periodMode === 'month' ? 'active' : ''}}">月</button><button bindtap="changePeriod" data-mode="year" class="{{periodMode === 'year' ? 'active' : ''}}">年</button><button bindtap="changePeriod" data-mode="custom" class="{{periodMode === 'custom' ? 'active' : ''}}">自定义</button></view>
+  <view wx:if="{{periodMode === 'custom'}}" class="custom-period">
+    <picker mode="date" value="{{customFrom}}" bindchange="onCustomFrom"><view class="date-picker focus-surface">{{customFrom || '开始日期'}}</view></picker><text>至</text><picker mode="date" value="{{customTo}}" bindchange="onCustomTo"><view class="date-picker focus-surface">{{customTo || '结束日期'}}</view></picker><button bindtap="applyCustomPeriod" class="apply-button">应用</button>
+  </view>
+  <view class="cashflow-card"><view><text>收入</text><text class="income money-number">{{incomeDisplay}}</text></view><view><text>支出</text><text class="expense money-number">{{expenseDisplay}}</text></view><view><text>净收支</text><text class="money-number">{{netDisplay}}</text></view></view>
+  <button class="bank-import" bindtap="openBankImport"><view class="bank-file-icon"></view><view><text>导入银行账单</text><text>AI 对照现有账目，找出可能漏记的项目</text></view><text class="chevron">›</text></button>
+  <text wx:if="{{loading}}" class="status">正在加载账目…</text><text wx:if="{{error}}" class="page-error">{{error}}</text>
+  <view wx:if="{{!loading && transactions.length === 0}}" class="ledger-empty"><view class="empty-receipt"></view><text class="empty-title">这个期间还没有账目</text><text class="empty-copy">从记录一笔日常收支开始，或导入银行账单查找遗漏。</text><button class="primary-button" bindtap="openManualEntry">记第一笔</button><button class="secondary-button" bindtap="openBankImport">导入银行账单</button></view>
+  <view wx:if="{{transactions.length}}" class="ledger-list"><button wx:for="{{transactions}}" wx:key="id" class="ledger-row" bindtap="openDetail" data-id="{{item.id}}"><text class="category-mark {{item.direction}}">{{item.direction === 'income' ? '收' : '支'}}</text><view class="ledger-row-main"><text>{{item.merchant || item.note || '未命名账目'}}</text><text>{{item.directionLabel}} · {{item.dateDisplay}}</text></view><text class="row-amount {{item.direction}} money-number">{{item.signedAmountDisplay}}</text><text class="chevron">›</text></button></view>
+  <view wx:if="{{selectedTransaction}}" class="detail-panel"><view class="detail-head"><text>账目详情</text><button bindtap="closeDetail" aria-label="关闭详情">×</button></view><view class="detail-row"><text>类型</text><text>{{selectedDirectionLabel}}</text></view><view class="detail-row"><text>金额</text><text>{{selectedAmountDisplay}}</text></view><view class="detail-row"><text>日期</text><text>{{selectedDateDisplay}}</text></view><view wx:if="{{selectedTransaction.merchant}}" class="detail-row"><text>商户</text><text>{{selectedTransaction.merchant}}</text></view><view wx:if="{{selectedTransaction.note}}" class="detail-row"><text>备注</text><text>{{selectedTransaction.note}}</text></view></view>
 </view>

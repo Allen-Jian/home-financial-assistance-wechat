@@ -3,13 +3,13 @@ import { DraftReviewPageModel } from '../pages/drafts/index';
 
 const draft = { id: 'draft-1', direction: 'expense' as const, amountMinor: 1250, status: 'pending' as const, occurredAt: '2026-08-15T00:00:00.000Z', merchant: 'Market', note: '周末采购', rawPayload: { sourceFileName: 'receipt.jpg' } };
 
-test('requires an account before confirming the current draft', async () => {
-  const api = { fetchPendingDrafts: jest.fn().mockResolvedValue([draft]), confirmDraft: jest.fn() };
+test('confirms the current draft without exposing an account selector', async () => {
+  const api = { fetchPendingDrafts: jest.fn().mockResolvedValue([draft]), confirmDraft: jest.fn().mockResolvedValue({ id: 'tx-1' }) };
   const model = new DraftReviewPageModel(api);
   await model.load();
-  await expect(model.confirm()).resolves.toBe(false);
-  expect(model.state.error).toContain('账户');
-  expect(api.confirmDraft).not.toHaveBeenCalled();
+  expect(model.state.currentAmountDisplay).toBe('NZ$12.50');
+  await expect(model.confirm()).resolves.toBe(true);
+  expect(api.confirmDraft).toHaveBeenCalledWith('draft-1', {});
 });
 
 test('keeps a duplicate candidate until the server accepts the chosen action', async () => {
@@ -17,12 +17,11 @@ test('keeps a duplicate candidate until the server accepts the chosen action', a
   const api = { fetchPendingDrafts: jest.fn().mockResolvedValue([draft]), confirmDraft: jest.fn().mockRejectedValueOnce(conflict).mockResolvedValueOnce({ id: 'tx-2' }) };
   const model = new DraftReviewPageModel(api);
   await model.load();
-  model.setAccount('account-1');
   await expect(model.confirm()).resolves.toBe(false);
   expect(model.state.duplicateActions).toEqual(['稍后处理', '保留两笔']);
   expect(model.state.drafts).toHaveLength(1);
   await expect(model.chooseDuplicate('keep-both')).resolves.toBe(true);
-  expect(api.confirmDraft).toHaveBeenLastCalledWith('draft-1', { accountId: 'account-1', allowDuplicate: true });
+  expect(api.confirmDraft).toHaveBeenLastCalledWith('draft-1', { allowDuplicate: true });
   expect(model.state.drafts).toHaveLength(0);
 });
 

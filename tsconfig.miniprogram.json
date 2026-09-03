@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "commonjs",
+    "rootDir": ".",
+    "outDir": ".",
+    "types": [],
+    "sourceMap": false,
+    "declaration": false
+  },
+  "include": ["app.ts", "src/**/*.ts", "pages/**/*.ts", "custom-tab-bar/**/*.ts"],
+  "exclude": []
+}

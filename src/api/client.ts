@@ -1,5 +1,6 @@
 import type {
   AiAnswer,
+  AiConversationSummary,
   DashboardSummary,
   DocumentDraft,
   HouseholdInvite,
@@ -7,16 +8,19 @@ import type {
   ImportedRow,
   ReportSummary,
   RecurringSummary,
+  TermDepositSummary,
   StageResult,
   TokenPair,
   TransactionSummary,
+  AiInsight,
   WechatLoginResponse,
 } from './contracts';
 import { SessionStore } from '../auth/session-store';
 import { ReadCache, type CachedRead } from '../cache/read-cache';
 import { isRecord } from '../shared/guards';
+import type { ConnectivityRuntime } from '../runtime/connectivity-runtime';
 
-export type RequestMethod = 'GET' | 'POST' | 'DELETE';
+export type RequestMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 export interface WxResponse {
   statusCode: number;
   data: unknown;
@@ -79,6 +83,7 @@ export interface ApiClientOptions {
   transport?: WxRequestPort;
   cache?: ReadCache;
   requestTimeoutMs?: number;
+  connectivity?: Pick<ConnectivityRuntime, 'isOnline'>;
 }
 
 export interface ReadResult<T> extends CachedRead<T> {
@@ -135,7 +140,12 @@ export class ApiClient {
     return this.requestJson<T>('POST', path, body, false);
   }
 
+  patch<T>(path: string, body: unknown = {}): Promise<T> {
+    return this.requestJson<T>('PATCH', path, body, false);
+  }
+
   upload<T>(path: string, file: FileUpload): Promise<T> {
+    if (this.options.connectivity && !this.options.connectivity.isOnline()) return Promise.reject(this.offlineError());
     const session = this.options.sessions.read();
     const header: Record<string, string> = session ? { Authorization: `Bearer ${session.accessToken}` } : {};
     return new Promise<T>((resolve, reject) => {
@@ -179,36 +189,64 @@ export class ApiClient {
   fetchSummary(period: Query = {}): Promise<DashboardSummary> { return this.get('/reports/summary', period); }
   fetchReports(period: Query): Promise<ReportSummary> { return this.get('/reports/summary', period); }
   fetchAccounts<T = unknown>(): Promise<T> { return this.get('/accounts'); }
-  fetchCategories<T = unknown>(): Promise<T> { return this.get('/categories'); }
+  fetchCategories<T = unknown>(includeInactive = false): Promise<T> {
+    return this.get('/categories', includeInactive ? { includeInactive: true } : {});
+  }
+  createCategory<T = unknown>(input: JsonObject): Promise<T> { return this.post('/categories', input); }
+  updateCategory<T = unknown>(id: string, input: JsonObject): Promise<T> { return this.patch(`/categories/${encodeURIComponent(id)}`, input); }
+  setInitialAsset<T = unknown>(amountMinor: number, expectedVersion: number): Promise<T> {
+    return this.patch('/accounts/primary/opening-balance', { amountMinor, expectedVersion });
+  }
+  updateOpeningBalance<T = unknown>(amountMinor: number, expectedVersion: number): Promise<T> {
+    return this.setInitialAsset(amountMinor, expectedVersion);
+  }
+  fetchTermDeposits(): Promise<TermDepositSummary[]> { return this.get('/term-deposits'); }
+  createTermDeposit(input: JsonObject): Promise<TermDepositSummary> { return this.post('/term-deposits', input); }
+  closeTermDeposit(id: string, expectedVersion: number): Promise<TermDepositSummary> {
+    return this.post(`/term-deposits/${encodeURIComponent(id)}/close`, { expectedVersion });
+  }
   fetchPendingDrafts<T = unknown>(): Promise<T> { return this.get('/drafts'); }
   fetchRecurring(): Promise<RecurringSummary[]> { return this.get('/recurring'); }
   createRecurring(input: JsonObject): Promise<RecurringSummary> { return this.post('/recurring', input); }
   advanceRecurring(id: string): Promise<RecurringSummary> { return this.post(`/recurring/${encodeURIComponent(id)}/advance`); }
   createTransaction<T = TransactionSummary>(input: JsonObject): Promise<T> { return this.post('/transactions', input); }
+  fetchTransactions(period: { from: string; to: string }): Promise<TransactionSummary[]> { return this.get('/transactions', period); }
   stageImport<T = unknown>(input: JsonObject): Promise<T> { return this.post('/imports/stage', input); }
   confirmDraft<T = TransactionSummary>(draftId: string, input: JsonObject = {}): Promise<T> { return this.post(`/drafts/${encodeURIComponent(draftId)}/confirm`, input); }
   previewDuplicates<T = unknown>(input: JsonObject): Promise<T> { return this.post('/duplicate-candidates/preview', input); }
   previewDocument(input: { filePath: string; fileName: string; contentType: string }): Promise<DocumentDraft> {
     return this.upload('/imports/pdf/preview', { filePath: input.filePath, name: 'file' });
   }
+  analyzePhoto(input: { filePath: string; fileName: string; contentType: string }): Promise<DocumentDraft> {
+    return this.previewDocument(input);
+  }
   previewAnzCsv(csv: string): Promise<ImportedRow[]> { return this.post('/imports/anz-csv/preview', { csv }); }
   stageAnzCsv(input: { fileHash: string; csv: string }): Promise<StageResult> { return this.post('/imports/anz-csv/stage', input); }
+  parseDraft(input: string): Promise<DocumentDraft> { return this.post('/ai/parse-draft', { input }); }
   uploadAttachment(input: { filePath: string; draftId: string; originalName: string; contentType: string }): Promise<unknown> {
     return this.upload(`/attachments/draft/${encodeURIComponent(input.draftId)}`, { filePath: input.filePath, name: 'file' });
   }
-  askAi<T extends Partial<AiAnswer> & { answer: string } = { answer: string }>(message: string): Promise<T> { return this.post('/ai/chat', { message }); }
+  askAi(message: string): Promise<AiAnswer>;
+  askAi(input: { conversationId?: string; message: string }): Promise<AiAnswer>;
+  askAi(input: string | { conversationId?: string; message: string }): Promise<AiAnswer> {
+    return this.post('/ai/chat', typeof input === 'string' ? { message: input } : input);
+  }
+  listAiConversations(): Promise<AiConversationSummary[]> { return this.get('/ai/conversations'); }
+  deleteAiConversation(id: string): Promise<{ deleted: boolean }> { return this.requestJson('DELETE' as RequestMethod, `/ai/conversations/${encodeURIComponent(id)}`, undefined, false); }
+  fetchAiInsights(period: Query = {}): Promise<AiInsight[]> { return this.get('/ai/insights', period); }
   fetchMembers(): Promise<HouseholdMember[]> { return this.get('/households/members'); }
   createInvite(expiresInDays = 7): Promise<HouseholdInvite> { return this.post('/households/invites', { expiresInDays }); }
   removeMember(membershipId: string): Promise<unknown> { return this.requestJson('DELETE' as RequestMethod, `/households/members/${encodeURIComponent(membershipId)}`, undefined, false); }
   exportTransactions(period: Query, format: 'json' | 'csv' = 'json'): Promise<unknown> { return this.get('/exports/transactions', { ...period, format }); }
   loginWithWechat(input: { code: string; inviteCode?: string; householdName?: string }): Promise<WechatLoginResponse> { return this.post('/auth/wechat/login', input); }
+  loginWithPassword(input: { username: string; password: string }): Promise<TokenPair> { return this.post('/auth/login', input); }
   async logout(): Promise<void> {
     const session = this.options.sessions.read();
     if (!session) return;
     try { await this.post('/auth/logout', { refreshToken: session.refreshToken }); } finally { this.options.sessions.clear(); }
   }
 
-  private async requestJson<T>(method: RequestMethod | 'DELETE', path: string, data: unknown, canRefresh: boolean): Promise<T> {
+  private async requestJson<T>(method: RequestMethod, path: string, data: unknown, canRefresh: boolean): Promise<T> {
     try {
       const response = await this.rawRequest(method, path, data);
       if (response.statusCode >= 200 && response.statusCode < 300) return this.parseBody<T>(response.data);
@@ -222,7 +260,8 @@ export class ApiClient {
     }
   }
 
-  private rawRequest(method: RequestMethod | 'DELETE', path: string, data: unknown): Promise<WxResponse> {
+  private rawRequest(method: RequestMethod, path: string, data: unknown): Promise<WxResponse> {
+    if (this.options.connectivity && !this.options.connectivity.isOnline()) return Promise.reject(this.offlineError());
     const session = this.options.sessions.read();
     const header: Record<string, string> = session ? { Authorization: `Bearer ${session.accessToken}` } : {};
     return new Promise<WxResponse>((resolve, reject) => {
@@ -272,6 +311,10 @@ export class ApiClient {
   private toApiError(statusCode: number, data: unknown): ApiError {
     const result = responseMessage(data, statusCode);
     return new ApiError(statusCode, errorCode(statusCode), result.message, result.details);
+  }
+
+  private offlineError(): ApiError {
+    return new ApiError(0, 'network', 'network unavailable until connectivity is confirmed');
   }
 
   private url(path: string, query?: Query): string {

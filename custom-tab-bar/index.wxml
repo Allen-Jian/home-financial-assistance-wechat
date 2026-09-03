@@ -1,0 +1,15 @@
+<view class="custom-tab-bar {{themeClass}}">
+  <view class="tab-bar-inner">
+    <block wx:for="{{slots}}" wx:key="label">
+      <button wx:if="{{item.action}}" class="tab-slot action-slot" bindtap="openEntry" aria-label="{{item.label}}">
+        <view class="action-icon">＋</view>
+        <text>{{item.label}}</text>
+      </button>
+      <button wx:else class="tab-slot {{selected === index ? 'selected' : ''}}" bindtap="selectTab" data-index="{{index}}" aria-label="{{item.label}}">
+        <image class="tab-icon {{selected === index ? 'selected' : ''}}" src="{{selected === index ? item.selectedIcon : item.icon}}" mode="aspectFit" />
+        <text>{{item.label}}</text>
+      </button>
+    </block>
+  </view>
+  <view class="safe-area"></view>
+</view>

@@ -1,4 +1,6 @@
 import type { HouseholdInvite, HouseholdMember } from '../../src/api/contracts';
+import { getRuntime } from '../../app';
+import { withThemePage } from '../../src/shared/themed-page';
 
 export type HouseholdRole = 'owner' | 'member';
 export interface HouseholdApiPort {
@@ -21,6 +23,8 @@ export class HouseholdPageModel {
   constructor(private readonly api: HouseholdApiPort, role: HouseholdRole, private readonly copy: (value: string) => void | Promise<void>) {
     this.state = { members: [], role, invite: null, copied: false, pendingRemovalId: null, loading: false, error: '' };
   }
+
+  setRole(role: HouseholdRole): void { this.state.role = role; }
 
   async load(): Promise<void> {
     this.state.loading = true;
@@ -65,5 +69,57 @@ export class HouseholdPageModel {
   }
 }
 
+interface PageContext { setData(data: unknown): void }
+
+interface WxHouseholdRuntime {
+  setClipboardData(options: { data: string; success?: () => void; fail?: (error: unknown) => void }): void;
+  showModal(options: { title: string; content: string; success: (result: { confirm?: boolean }) => void }): void;
+}
+
+declare const wx: WxHouseholdRuntime;
+
+function tokenSubject(token: string | undefined): string | undefined {
+  if (!token) return undefined;
+  try {
+    const encoded = token.split('.')[1]?.replace(/-/g, '+').replace(/_/g, '/');
+    if (!encoded) return undefined;
+    const json = JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, '='))) as Record<string, unknown>;
+    return typeof json.sub === 'string' ? json.sub : undefined;
+  } catch { return undefined; }
+}
+
+export function createHouseholdPage(model: HouseholdPageModel) {
+  return {
+    data: model.state,
+    async onShow(this: PageContext) { await model.load(); this.setData(model.state); },
+    async createInvite(this: PageContext) { await model.createInvite(7); this.setData(model.state); },
+    async copyInvite(this: PageContext) { await model.copyInvite(); this.setData(model.state); },
+    remove(this: PageContext, event: { currentTarget?: { dataset?: { id?: string } } }) {
+      const id = event.currentTarget?.dataset?.id;
+      if (!id) return;
+      model.requestRemove(id);
+      if (model.state.pendingRemovalId !== id) return;
+      wx.showModal({ title: '移除成员', content: '确定移除该家庭成员吗？', success: async (result) => {
+        if (result.confirm) await model.confirmRemove();
+        else model.cancelRemove();
+        this.setData(model.state);
+      } });
+    },
+  };
+}
+
 declare function Page(options: Record<string, unknown>): void;
-if (typeof Page !== 'undefined') Page({ data: { members: [], role: 'member', invite: null, copied: false, pendingRemovalId: null, loading: false, error: '' } });
+declare function getApp<T>(): unknown;
+if (typeof Page !== 'undefined' && typeof getApp !== 'undefined') {
+  const runtime = getRuntime();
+  const currentUserId = tokenSubject(runtime.sessions.read()?.accessToken);
+  const model = new HouseholdPageModel(runtime.api, 'member', (value) => new Promise<void>((resolve, reject) => wx.setClipboardData({ data: value, success: () => resolve(), fail: reject })));
+  const page = createHouseholdPage(model);
+  const originalOnShow = page.onShow;
+  page.onShow = async function(this: PageContext) {
+    await originalOnShow.call(this);
+    const current = model.state.members.find((member) => member.userId === currentUserId);
+    if (current) { model.setRole(current.role); this.setData(model.state); }
+  };
+  Page(withThemePage(page, runtime.theme));
+}

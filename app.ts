@@ -2,6 +2,15 @@ import type { Session } from './src/auth/session-store';
 import type { StorageLike, SessionStore } from './src/auth/session-store';
 import { ApiError } from './src/api/client';
 import { AI_CHAT_STORAGE_KEY } from './src/shared/copy';
+import { createAppRuntime, createWxStorage, type AppRuntime } from './src/runtime/app-runtime';
+
+export interface AppInstance {
+  globalData: {
+    runtime: AppRuntime;
+    theme: AppRuntime['theme'];
+    session: Session | null;
+  };
+}
 
 export function resolveInitialRoute(session: Session | null): string {
   return session ? '/pages/dashboard/index' : '/pages/login/index';
@@ -19,10 +28,20 @@ export function clearPrivateSession(sessions: SessionStore, storage: StorageLike
 }
 
 declare function App(options: Record<string, unknown>): void;
-if (typeof App !== 'undefined') {
+declare function getApp<T>(): T;
+declare const wx: unknown;
+
+export function getRuntime(): AppRuntime {
+  return getApp<AppInstance>().globalData.runtime;
+}
+
+if (typeof App !== 'undefined' && typeof wx !== 'undefined') {
+  const runtime = createAppRuntime(createWxStorage());
   App({
     globalData: {
-      session: null,
+      runtime,
+      theme: runtime.theme,
+      session: runtime.sessions.read(),
     },
   });
 }

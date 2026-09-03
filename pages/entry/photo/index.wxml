@@ -1,0 +1,21 @@
+<page-meta page-style="{{themePageStyle}}" />
+<view class="page capture-page {{themeClass}}">
+  <view class="entry-appbar"><button class="close-button" bindtap="close" aria-label="关闭记账流程">×</button><text>{{source === 'bill' ? '导入账单文件' : '拍照记账'}}</text><view class="appbar-spacer"></view></view>
+  <view wx:if="{{!file && !loading}}" class="capture-start"><view class="capture-illustration {{source === 'bill' ? 'bill' : ''}}"></view><text>{{source === 'bill' ? '选择水电网煤气账单' : '拍下今天的小票'}}</text><text>{{source === 'bill' ? '支持微信文件中的 PDF 或图片' : 'AI 会识别金额、商户、日期和分类'}}</text><button wx:if="{{source === 'bill'}}" class="primary-button" bindtap="chooseBillFile">选择账单文件</button><block wx:else><button class="primary-button" bindtap="choosePhoto">打开相机</button><view class="image-source-actions"><button class="secondary-button" bindtap="chooseAlbum">从相册选择</button><button class="secondary-button" bindtap="chooseChatImage">从聊天选择</button></view></block></view>
+  <view wx:if="{{loading}}" class="analysis-state">
+    <view class="ai-scanner motion-safe"><view class="scan-orbit"></view><view class="scan-core {{source === 'bill' ? 'bill' : ''}}"><view></view></view></view>
+    <text class="analysis-title">AI 正在{{source === 'bill' ? '读取这份账单' : '读懂这张小票'}}</text><text class="analysis-status">正在识别金额、商户和日期…</text><view class="progress motion-safe"><view></view></view><text class="analysis-note">识别结果只会填入表单，保存前不会入账</text>
+  </view>
+  <view wx:if="{{draft && !loading && !confirmed}}" class="entry-form">
+    <view class="ai-filled-note"><text>✦</text><view><text>{{source === 'bill' ? '账单已识别' : '小票已识别'}}</text><text>AI 已填入表单，请核对后保存</text></view></view>
+    <view class="direction-switch"><button bindtap="onDirectionChange" data-value="expense" class="{{draft.direction === 'expense' ? 'active' : ''}}">支出</button><button bindtap="onDirectionChange" data-value="income" class="{{draft.direction === 'income' ? 'active' : ''}}">收入</button></view>
+    <view class="amount-field focus-surface"><text>金额</text><view><text>NZ$</text><input bindinput="onAmountInput" type="digit" value="{{amount}}" placeholder="0.00" /></view></view>
+    <label class="inline-field focus-surface"><text>商户／来源</text><input data-field="merchant" bindinput="onDraftInput" value="{{draft.merchant}}" placeholder="例如 PAK'nSAVE" /></label>
+    <view class="category-section"><view class="category-head"><text>分类</text><text wx:if="{{needsCategoryReview}}">AI 建议核对</text></view><view class="category-grid"><button wx:for="{{visibleCategories}}" wx:key="id" bindtap="onCategoryTap" data-id="{{item.id}}" class="{{categoryId === item.id ? 'active' : ''}}">{{item.name}}</button></view></view>
+    <view class="form-group"><picker mode="date" value="{{draft.occurredAt}}" bindchange="onDateChange"><view class="form-row focus-surface"><view><text>日期</text><text>{{draft.occurredAt || '选择日期'}}</text></view><text class="chevron">›</text></view></picker><label class="note-field focus-surface"><text>备注（可选）</text><textarea data-field="note" bindinput="onDraftInput" value="{{draft.note}}" placeholder="补充这笔账目的说明"></textarea></label></view>
+    <view class="safety-note"><text>✓</text><text>保存前会检查相同日期和金额的重复记录。</text></view>
+    <text wx:if="{{error}}" class="page-error">{{error}}</text><view wx:if="{{stagedExisting}}" class="fallback-actions"><button bindtap="openManual">改为手动录入</button></view><button wx:if="{{!stagedExisting}}" class="primary-button save-button" bindtap="confirm">保存账目</button>
+  </view>
+  <view wx:if="{{error && !draft && !loading}}" class="analysis-error"><text>{{error}}</text><button class="secondary-button" bindtap="retry">重新分析</button><button class="primary-button" bindtap="openManual">改为手动录入</button></view>
+  <view wx:if="{{confirmed}}" class="success-state"><text>✓</text><text>账目已保存</text><text>这笔记录已经加入家庭账本</text></view>
+</view>

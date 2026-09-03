@@ -1,1 +1,1 @@
-.amount-card { padding: 28rpx; border-radius: 24rpx; background: #fff; }.label, .caption { display: block; color: #78918d; font-size: 22rpx; }.amount { display: block; margin: 10rpx 0; color: #123b38; font-size: 42rpx; font-weight: 700; }
+.amount-card { padding: 28rpx; border-radius: 24rpx; background: var(--color-surface); }.label, .caption { display: block; color: var(--color-muted); font-size: 22rpx; }.amount { display: block; margin: 10rpx 0; color: var(--color-text); font-size: 42rpx; font-weight: 700; }

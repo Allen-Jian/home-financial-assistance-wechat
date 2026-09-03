@@ -35,12 +35,35 @@ function makeClient(fake: FakeWx, accessToken = 'access-token') {
 }
 
 describe('ApiClient', () => {
+  test('posts account credentials to the password login endpoint', async () => {
+    const fake = new FakeWx([{ statusCode: 200, data: { accessToken: 'a', refreshToken: 'r', householdId: 'h' } }]);
+    const sessions = new SessionStore(new MemoryStorage());
+    const client = new ApiClient({ baseUrl: 'https://ledger.test/v1', sessions, transport: fake });
+
+    await expect(client.loginWithPassword({ username: 'allen', password: 'secret' })).resolves.toMatchObject({ householdId: 'h' });
+
+    expect(fake.requests[0]).toMatchObject({ url: 'https://ledger.test/v1/auth/login', method: 'POST', data: { username: 'allen', password: 'secret' }, header: {} });
+  });
   test('adds the bearer token to JSON requests', async () => {
     const fake = new FakeWx([{ statusCode: 200, data: { ok: true } }]);
     const { client } = makeClient(fake);
     await expect(client.get('/reports/summary', { from: 'a', to: 'b' })).resolves.toEqual({ ok: true });
     expect(fake.requests[0].header).toEqual({ Authorization: 'Bearer access-token' });
     expect(fake.requests[0].url).toBe('https://ledger.test/v1/reports/summary?from=a&to=b');
+  });
+
+  test('requests inactive categories only when settings explicitly include them', async () => {
+    const fake = new FakeWx([{ statusCode: 200, data: [] }]);
+    const { client } = makeClient(fake);
+    await expect(client.fetchCategories(true)).resolves.toEqual([]);
+    expect(fake.requests[0].url).toBe('https://ledger.test/v1/categories?includeInactive=true');
+  });
+
+  test('fetches transactions with the selected period query', async () => {
+    const fake = new FakeWx([{ statusCode: 200, data: [] }]);
+    const { client } = makeClient(fake);
+    await expect(client.fetchTransactions({ from: '2026-07-31T12:00:00.000Z', to: '2026-08-31T12:00:00.000Z' })).resolves.toEqual([]);
+    expect(fake.requests[0].url).toBe('https://ledger.test/v1/transactions?from=2026-07-31T12%3A00%3A00.000Z&to=2026-08-31T12%3A00%3A00.000Z');
   });
 
   test('refreshes once after a read 401 and replays the read', async () => {

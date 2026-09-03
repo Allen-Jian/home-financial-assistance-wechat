@@ -1,6 +1,8 @@
-import { DashboardPageModel } from '../pages/dashboard/index';
+import { createDashboardPage, DashboardPageModel } from '../pages/dashboard/index';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { ApiError } from '../src/api/client';
-import type { AccountSummary, CategorySummary, DashboardSummary } from '../src/api/contracts';
+import type { AccountSummary, AiInsight, CategorySummary, DashboardSummary } from '../src/api/contracts';
 import { ReadCache } from '../src/cache/read-cache';
 import { SessionStore, type StorageLike } from '../src/auth/session-store';
 import { LoginPageModel } from '../pages/login/index';
@@ -15,6 +17,9 @@ class MemoryStorage implements StorageLike {
 
 const summary: DashboardSummary = {
   netWorthMinor: 120_000,
+  totalAssetsMinor: 150_000,
+  initialAssetsMinor: 100_000,
+  termDepositMinor: 50_000,
   incomeMinor: 300_000,
   expenseMinor: 180_000,
   categoryBreakdown: [],
@@ -28,6 +33,36 @@ const summary: DashboardSummary = {
 const accounts: AccountSummary[] = [{ id: 'account-1', name: '日常账户', kind: 'asset', openingBalanceMinor: 0 }];
 const categories: CategorySummary[] = [{ id: 'category-1', name: '餐饮', direction: 'expense' }];
 
+test('dashboard no longer renders the duplicate floating add action', () => {
+  const wxml = readFileSync(resolve(__dirname, '../pages/dashboard/index.wxml'), 'utf8');
+  const wxss = readFileSync(resolve(__dirname, '../pages/dashboard/index.wxss'), 'utf8');
+  const source = readFileSync(resolve(__dirname, '../pages/dashboard/index.ts'), 'utf8');
+
+  expect(wxml).not.toContain('floating-add');
+  expect(wxss).not.toContain('.floating-add');
+  expect(source).not.toContain('onQuickEntry');
+});
+
+test('home quick actions open the approved photo, manual, ledger, and AI routes', () => {
+  const navigateTo = jest.fn();
+  const switchTab = jest.fn();
+  (globalThis as { wx?: unknown }).wx = { navigateTo, switchTab };
+  const model = new DashboardPageModel({
+    fetchSummary: jest.fn(), fetchAccounts: jest.fn(), fetchCategories: jest.fn(),
+  });
+  const page = createDashboardPage(model);
+
+  page.onPhotoEntry();
+  page.onManualEntry();
+  page.onOpenLedger();
+  page.onOpenAi();
+
+  expect(navigateTo).toHaveBeenNthCalledWith(1, { url: '/pages/entry/photo/index' });
+  expect(navigateTo).toHaveBeenNthCalledWith(2, { url: '/pages/ledger/edit/index' });
+  expect(switchTab).toHaveBeenNthCalledWith(1, { url: '/pages/ledger/index' });
+  expect(switchTab).toHaveBeenNthCalledWith(2, { url: '/pages/ai/index' });
+});
+
 test('routes an unauthenticated app to login and a successful Mock login to the dashboard', async () => {
   expect(resolveInitialRoute(null)).toBe('/pages/login/index');
   const storage = new MemoryStorage();
@@ -39,6 +74,23 @@ test('routes an unauthenticated app to login and a successful Mock login to the 
   await expect(model.login()).resolves.toBe(true);
   expect(navigate).toHaveBeenCalledWith('/pages/dashboard/index');
   expect(resolveInitialRoute(sessions.read())).toBe('/pages/dashboard/index');
+});
+
+test('account password login saves the session and clears the in-memory password', async () => {
+  const storage = new MemoryStorage();
+  const sessions = new SessionStore(storage);
+  const navigate = jest.fn();
+  const passwordApi = { loginWithPassword: jest.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r', householdId: 'h-1' }) };
+  const model = new LoginPageModel({ login: jest.fn() }, sessions, navigate, passwordApi);
+  model.setUsername('allen');
+  model.setPassword('family-secret');
+
+  await expect(model.passwordLogin()).resolves.toBe(true);
+
+  expect(passwordApi.loginWithPassword).toHaveBeenCalledWith({ username: 'allen', password: 'family-secret' });
+  expect(sessions.read()).toEqual({ accessToken: 'a', refreshToken: 'r', householdId: 'h-1' });
+  expect(model.state.password).toBe('');
+  expect(navigate).toHaveBeenCalledWith('/pages/dashboard/index');
 });
 
 test('loads the household cockpit and exposes pending/duplicate/recurring counts', async () => {
@@ -60,6 +112,44 @@ test('loads the household cockpit and exposes pending/duplicate/recurring counts
   }));
 });
 
+test('formats dashboard amounts before they reach the WXML template', async () => {
+  const api = {
+    fetchSummary: jest.fn().mockResolvedValue(summary),
+    fetchAccounts: jest.fn().mockResolvedValue(accounts),
+    fetchCategories: jest.fn().mockResolvedValue(categories),
+  };
+  const model = new DashboardPageModel(api);
+
+  await model.load({ from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' });
+
+  expect(model.state).toEqual(expect.objectContaining({
+    netWorthDisplay: 'NZ$1200.00',
+    totalAssetsDisplay: 'NZ$1500.00',
+    initialAssetsDisplay: 'NZ$1000.00',
+    termDepositDisplay: 'NZ$500.00',
+    incomeDisplay: 'NZ$3000.00',
+    expenseDisplay: 'NZ$1800.00',
+  }));
+});
+
+test('formats recent transactions for the home list without WXML arithmetic', async () => {
+  const api = {
+    fetchSummary: jest.fn().mockResolvedValue({
+      ...summary,
+      recentTransactions: [{ id: 'tx-1', accountId: 'primary', direction: 'expense' as const, amountMinor: 8430, occurredAt: '2026-08-30T04:42:00.000Z', merchant: "PAK'nSAVE", version: 0 }],
+    }),
+    fetchAccounts: jest.fn().mockResolvedValue(accounts),
+    fetchCategories: jest.fn().mockResolvedValue(categories),
+  };
+  const model = new DashboardPageModel(api);
+
+  await model.load({ from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' });
+
+  expect(model.state.recentTransactions[0]).toEqual(expect.objectContaining({
+    amountDisplay: '− NZ$84.30', directionLabel: '支出', merchant: "PAK'nSAVE",
+  }));
+});
+
 test('renders cached summary with a cache label after the API is unavailable', async () => {
   const storage = new MemoryStorage();
   const cache = new ReadCache(storage);
@@ -73,4 +163,129 @@ test('renders cached summary with a cache label after the API is unavailable', a
   api.fetchSummary.mockRejectedValue(new ApiError(0, 'network', 'network unavailable'));
   await model.load({ from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' });
   expect(model.state).toEqual(expect.objectContaining({ summary, fromCache: true, cacheLabel: '缓存数据' }));
+});
+
+test('dashboard cache is isolated by household', async () => {
+  const storage = new MemoryStorage();
+  const cache = new ReadCache(storage);
+  const period = { from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' };
+  const firstApi = { fetchSummary: jest.fn().mockResolvedValue(summary), fetchAccounts: jest.fn().mockResolvedValue(accounts), fetchCategories: jest.fn().mockResolvedValue(categories) };
+  await new DashboardPageModel(firstApi, cache, () => 'household-a').load(period);
+  const secondApi = { fetchSummary: jest.fn().mockRejectedValue(new ApiError(0, 'network', 'offline')), fetchAccounts: jest.fn().mockRejectedValue(new ApiError(0, 'network', 'offline')), fetchCategories: jest.fn().mockRejectedValue(new ApiError(0, 'network', 'offline')) };
+  const second = new DashboardPageModel(secondApi, cache, () => 'household-b');
+  await second.load(period);
+  expect(second.state.fromCache).toBe(false);
+  expect(second.state.summary).toBeNull();
+});
+
+test('late dashboard request cannot clear the newer household state or loading', async () => {
+  let household = 'household-a';
+  let resolveFirst!: (value: DashboardSummary) => void;
+  let resolveInsights!: (value: []) => void;
+  const firstSummary = new Promise<DashboardSummary>((resolve) => { resolveFirst = resolve; });
+  const pendingInsights = new Promise<[]>((resolve) => { resolveInsights = resolve; });
+  const secondSummary = { ...summary, netWorthMinor: 220_000 };
+  const api = {
+    fetchSummary: jest.fn().mockImplementationOnce(() => firstSummary).mockResolvedValue(secondSummary),
+    fetchAccounts: jest.fn().mockResolvedValue(accounts),
+    fetchCategories: jest.fn().mockResolvedValue(categories),
+    fetchAiInsights: jest.fn().mockReturnValue(pendingInsights),
+  };
+  const model = new DashboardPageModel(api, undefined, () => household);
+  const firstLoad = model.load({ from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' });
+  household = 'household-b';
+  const secondLoad = model.load({ from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' });
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  expect(model.state.summary).toBe(secondSummary);
+  expect(model.state.loading).toBe(true);
+
+  resolveFirst(summary);
+  await firstLoad;
+  expect(model.state.summary).toBe(secondSummary);
+  expect(model.state.loading).toBe(true);
+
+  resolveInsights([]);
+  await secondLoad;
+  expect(model.state.loading).toBe(false);
+});
+
+test('late dashboard insight request cannot overwrite the newer household insights', async () => {
+  let household = 'household-a';
+  let resolveFirst!: (value: AiInsight[]) => void;
+  const firstInsights = new Promise<AiInsight[]>((resolve) => { resolveFirst = resolve; });
+  const oldInsight = { type: 'old', title: '旧家庭' };
+  const newInsight = { type: 'new', title: '新家庭' };
+  const api = {
+    fetchSummary: jest.fn().mockResolvedValue(summary),
+    fetchAccounts: jest.fn().mockResolvedValue(accounts),
+    fetchCategories: jest.fn().mockResolvedValue(categories),
+    fetchAiInsights: jest.fn().mockImplementationOnce(() => firstInsights).mockResolvedValue([newInsight]),
+  };
+  const model = new DashboardPageModel(api, undefined, () => household);
+  const firstLoad = model.load({ from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' });
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  household = 'household-b';
+  await model.load({ from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' });
+  expect(model.state.insights).toEqual([newInsight]);
+
+  resolveFirst([oldInsight]);
+  await firstLoad;
+  expect(model.state.insights).toEqual([newInsight]);
+});
+
+test('dashboard household cleanup resets every private display and marker', async () => {
+  let household = 'household-a';
+  let resolveRequest!: (value: DashboardSummary) => void;
+  const pending = new Promise<DashboardSummary>((resolve) => { resolveRequest = resolve; });
+  const api = {
+    fetchSummary: jest.fn().mockReturnValue(pending),
+    fetchAccounts: jest.fn().mockResolvedValue(accounts),
+    fetchCategories: jest.fn().mockResolvedValue(categories),
+  };
+  const model = new DashboardPageModel(api, undefined, () => household);
+  const load = model.load({ from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' });
+  Object.assign(model.state, {
+    summary,
+    accounts,
+    categories,
+    pendingDraftCount: 2,
+    duplicateCount: 1,
+    recurringDueCount: 3,
+    recentTransactions: summary.recentTransactions,
+    fromCache: true,
+    cacheLabel: '缓存数据',
+    netWorthDisplay: 'NZ$1200.00',
+    totalAssetsDisplay: 'NZ$1500.00',
+    initialAssetsDisplay: 'NZ$1000.00',
+    termDepositDisplay: 'NZ$500.00',
+    incomeDisplay: 'NZ$3000.00',
+    expenseDisplay: 'NZ$1800.00',
+    insights: [{ title: '旧家庭', detail: '旧数据', severity: 'info' }],
+    insightsFromCache: true,
+    error: '旧错误',
+  });
+  household = 'household-b';
+  resolveRequest(summary);
+  await load;
+  expect(model.state).toEqual(expect.objectContaining({
+    summary: null,
+    accounts: [],
+    categories: [],
+    pendingDraftCount: 0,
+    duplicateCount: 0,
+    recurringDueCount: 0,
+    recentTransactions: [],
+    fromCache: false,
+    cacheLabel: '',
+    netWorthDisplay: '--',
+    totalAssetsDisplay: '--',
+    initialAssetsDisplay: '--',
+    termDepositDisplay: '--',
+    incomeDisplay: '--',
+    expenseDisplay: '--',
+    insights: [],
+    insightsFromCache: false,
+    error: '',
+    loading: false,
+  }));
 });
