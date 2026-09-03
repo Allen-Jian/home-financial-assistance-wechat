@@ -106,8 +106,9 @@ docker compose --env-file apps/api/.env -f infra/docker-compose.yml up -d --buil
 | IMAGE-05-CONTROLS-DEVTOOLS | 图片页入口布局 | 图片页主相机入口与相册/聊天图片次级入口对齐 | 2026-09-03：photo 页截图显示 camera primary 与 album/chat secondary controls 对齐；实际 picker、权限与取消未调用 | 通过 |
 | DEVTOOLS-01 | 微信开发者工具 | 三主题、原生栏/回弹、五槽、旧加号、气泡、键盘、多行、三图片来源均可操作 | 已记录的局部 compile/runtime/theme/navigation/AI/photo 证据见精确子行；回弹、系统事件、键盘、实际 picker 和完整 composite 仍未执行 | 未执行 |
 | DEVICE-01 | 真机验收 | iOS/Android 完成主题、输入法、相机/相册/聊天图片、网络错误和安全区验收 | 本轮没有连接真机或采集设备证据 | 未执行 |
-| API-LOCAL-01 | 共享 API 本地 null scope 修复 | MiniMax 返回 null scope 时由服务端使用可信报告期间，输出 `scope.from/to` 字符串 | 只读检查 `D:\self\家庭手账APP\apps\api\src\ai\minimax.client.ts` 与 `ai-chat.service.ts`；AI 相关 2 suites/12 tests、完整 25 suites/110 tests、`npm run build` 均通过。API 工作树原有用户改动保持不动 | 通过 |
-| API-PROD-01 | 生产 `/v1/ai/chat` | 授权后重建并重启 api，再用空账本和有账目家庭验证 HTTP 200、字符串 scope、只读回答和授权引用 | 本轮未访问或重启 VPS；生产 502 仍在授权门槛，必须用户明确授权“仅重建并发布 VPS API 服务”后才能继续 | 未执行 |
+| API-LOCAL-01 | 共享 API 本地 null scope 修复 | MiniMax 返回 null scope 时由服务端使用可信报告期间，输出 `scope.from/to` 字符串 | `D:\self\家庭手账APP` 提交 `dd81f86`；完整 25 suites/110 tests 与 `npm run build` 均通过 | 通过 |
+| API-PROD-01-CURRENT | 当前家庭生产 `/v1/ai/chat` 回归 | 已认证客户端获得 HTTP 200、只读回答及字符串 `scope.from/to`，不再出现 502 | 2026-09-03：仅重建 `infra-api-1` 后，DevTools 现有会话返回“本月账本暂无任何数据…”；scope=`2026-09-01T00:00:00.000Z` 至 `2026-10-01T00:00:00.000Z`，页面 error 为空，8 秒 console 为 0 error/warning/exception | 通过 |
+| API-PROD-01 | 生产 `/v1/ai/chat` 完整矩阵 | 用空账本和有账目家庭验证 HTTP 200、字符串 scope、只读回答和授权引用 | 当前空账本家庭已由 `API-PROD-01-CURRENT` 验证；有账目家庭和授权引用仍未执行 | 未执行 |
 
 ### 本轮命令与边界
 
@@ -131,7 +132,7 @@ git diff --check
 git status --short --branch
 ```
 
-API 当前工作树的既有修改包括 `apps/api/src/ai/ai-chat.service.ts`、`apps/api/src/ai/minimax.client.ts`、对应测试以及认证文件；本轮没有编辑、部署、重启或触碰数据库、Redis、volume、migration、凭据。微信开发者工具仅完成了上表记录的局部证据，综合 `DEVTOOLS-01` 仍未执行；生产 502 与真机状态均保持待后续授权/设备验收。
+用户于 2026-09-03 明确授权“仅重建并发布 VPS API 服务”。本轮发布 API 提交 `dd81f86`，镜像 `sha256:9c6b949a8dc183a3b3cd61c43eea36deeaa88c6b1e218727fb9f630437f27dfb`；使用 API-only Compose 覆盖启动 `node dist/main.js`，没有执行 migration。PostgreSQL、Redis 容器 ID/启动时间均未改变，`.env` 哈希前后相同，volume 和凭据未操作；公网 `/v1/health` 返回 200，API 重启次数为 0，近 10 分钟错误行数为 0。发布前源文件备份位于 VPS `/opt/family-ledger/patch-backups/20260903T001907Z-ai-chat/api-source-before.tgz`。微信开发者工具仅完成了上表记录的局部证据，综合 `DEVTOOLS-01` 与真机状态仍待设备验收。
 
 ## 功能清单
 
